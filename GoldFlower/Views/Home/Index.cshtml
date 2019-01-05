@@ -1,0 +1,402 @@
+﻿@{
+	ViewData["Title"] = "Install NSP(s)";
+}
+
+<div id="app">
+
+	<div class="header">
+		&nbsp;
+	</div>
+
+	<div class="container">
+		<section class="module">
+			<div class="module-inner">
+				<div class="content-panel">
+					<div class="content-header-wrapper">
+						<h2 class="title">My NSP(s)</h2>
+
+						<div class="alert-container">
+							<div class="alert alert-danger" v-if="error">
+								<strong>Error:</strong>
+								<p>
+									{{ error }}
+								</p>
+							</div>
+							<div class="alert alert-warning" v-if="warning">
+								<strong>Warning:</strong>
+								<p>
+									{{ warning }}
+								</p>
+							</div>
+						</div>
+
+						<div class="actions" v-if="installer.status === IDLE || installer.status === ABORTED || installer.status === CANCELLED">
+							<div class="form-group">
+								<label for="path">Enter your NSP directory path below</label>
+								<input type="text" id="path" v-model="path" class="form-control" />
+							</div>
+
+							<button class="btn btn-primary" v-on:click="onSelectDirectoryClicked">
+								<span class="fa fa-folder"></span> Open NSP directory
+							</button>
+						</div>
+					</div>
+
+					<template v-if="installer.status === IDLE || installer.status === ABORTED || installer.status === CANCELLED">
+						<p class="alert alert-info">
+							The number in front of the selected NSP(s) indicates the installation order
+						</p>
+
+						<div class="actions clearfix">
+							<button class="btn btn-primary pull-right" v-on:click="onInstallCicked" :disabled="!selected.length">
+								<span class="fa fa-upload"></span> Install selected NSP(s)
+							</button>
+						</div>
+
+						<div class="drive-wrapper drive-list-view">
+							<div class="table-responsive drive-items-table-wrapper">
+								<table class="table table-hover">
+									<thead>
+										<tr>
+											<th class="order"></th>
+											<th class="type"></th>
+											<th class="name truncate">Name</th>
+											<th class="titleid">Title ID</th>
+											<th class="version">Version</th>
+											<th class="size">Size</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr v-for="(file, index) in files" :key="index" :class="{ selected: file.selected }">
+											<td class="order">
+												<span v-if="file.selected">{{ selected.findIndex(x => x.name === file.name) + 1 }}</span>
+											</td>
+
+											<td class="type">
+												<i class="fa fa-file-text-o text-primary"></i>
+											</td>
+
+											<td class="name truncate">
+												<a v-on:click="onFileClicked(file)">{{ file.name }}</a>
+											</td>
+
+											<td class="titleid">
+												{{ getTitleId(file.name) }}
+											</td>
+
+											<td class="version">
+												{{ getTitleVersion(file.name) }}
+											</td>
+
+											<td class="size">
+												{{ convertBytesToHumanSize(file.size) }}
+											</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+
+						<div class="actions clearfix">
+							<button class="btn btn-primary pull-right" v-on:click="onInstallCicked" :disabled="!selected.length">
+								<span class="fa fa-upload"></span> Install selected NSP(s)
+							</button>
+						</div>
+					</template>
+					<template v-else-if="installer.status === INSTALLING || installer.status === AWAITINGUSERINPUT || installer.status === FINISHED">
+						<div class="tile-progress tile-cyan">
+							<div class="tile-header">
+								<h3>{{ installer.currentFile.name }}</h3>
+								<span>File progress: {{ installer.files.findIndex(x => x.name === installer.currentFile.name) + 1 }} / {{ installer.files.length }}</span>
+							</div>
+							<div class="tile-progressbar">
+								<span :data-fill="`${installer.progress}%`" :style="`width: ${installer.progress}%;`"></span>
+							</div>
+							<div class="tile-footer">
+								<h4>
+									<span class="pct-counter">{{ installer.progress }}</span>%
+								</h4>
+								<span v-if="installer.state === FINISHED">Installation completed</span>
+                                <span v-if="installer.state === AWAITINGUSERINPUT">Awaiting user input</span>
+                                <span v-if="installer.state === INSTALLING">Installing</span>
+							</div>
+						</div>
+
+
+						<div class="actions clearfix">
+							<button class="btn btn-danger pull-right" v-on:click="onAbortClicked" v-if="installer.status !== FINISHED">
+								<span class="fa fa-close"></span> Abort installation
+							</button>
+
+                            <button class="btn btn-success pull-right" v-on:click="onCompleteClicked" v-else>
+								<span class="fa fa-close"></span> Complete installation
+							</button>
+						</div>
+
+						<div class="drive-wrapper drive-list-view">
+							<div class="table-responsive drive-items-table-wrapper">
+								<table class="table table-hover">
+									<thead>
+										<tr>
+											<th class="type"></th>
+											<th class="name truncate">Name</th>
+											<th class="titleid">Title ID</th>
+											<th class="version">Version</th>
+											<th class="size">Size</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr v-for="(file, index) in installer.files" :key="index">
+											<td class="type">
+												<i v-if="file.state === INSTALLING" class="fa fa-spin fa-circle-o-notch"></i>
+												<i v-else-if="file.state === FINISHED" class="fa fa-check text-success"></i>
+												<i v-else-if="file.state === FAILED" class="fa fa-close text-danger"></i>
+												<i v-else="file.state === IDLE" class="fa fa-ellipsis-h"></i>
+											</td>
+
+											<td class="name truncate">
+												<a>{{ file.name }}</a>
+											</td>
+
+											<td class="titleid">
+												{{ getTitleId(file.name) }}
+											</td>
+
+											<td class="version">
+												{{ getTitleVersion(file.name) }}
+											</td>
+
+											<td class="size">
+												{{ convertBytesToHumanSize(file.size) }}
+											</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+					</template>
+
+                    <div v-if="installer.events">
+                        <div class="alert alert-danger" v-if="installer.events.error">
+                            <ul>
+                                <li v-for="(item, index) in installer.events.error" :key="index">{{ item }}</li>
+                            </ul>
+                        </div>
+                        <div class="alert alert-warning" v-if="installer.events.warning">
+                            <ul>
+                                <li v-for="(item, index) in installer.events.warning" :key="index">{{ item }}</li>
+                            </ul>
+                        </div>
+                        <div class="alert alert-success" v-if="installer.events.success">
+                            <ul>
+                                <li v-for="(item, index) in installer.events.success" :key="index">{{ item }}</li>
+                            </ul>
+                        </div>
+                        <div class="alert alert-info" v-if="installer.events.info">
+                            <ul>
+                                <li v-for="(item, index) in installer.events.info" :key="index">{{ item }}</li>
+                            </ul>
+                        </div>
+                    </div>
+				</div>
+			</div>
+		</section>
+	</div>
+</div>
+
+@section Scripts {
+	<script type="text/javascript">
+		const AWAITINGUSERINPUT = 0;
+		const INSTALLING = 1;
+		const ABORTED = 2;
+		const FINISHED = 3;
+		const CANCELLED = 4;
+        const IDLE = 5;
+        const FAILED = 6;
+
+		const app = new Vue({
+			el: '#app',
+
+			data() {
+				return {
+					path: '@(ViewBag.Path.Replace(@"\", @"\\"))',
+					files: [],
+					selected: [],
+					error: null,
+					warning: null,
+					installer: {
+						status: IDLE,
+						progress: 0,
+						currentFile: null,
+						files: [],
+                        events: null
+					},
+					AWAITINGUSERINPUT: AWAITINGUSERINPUT,
+					INSTALLING: INSTALLING,
+					ABORTED: ABORTED,
+					FINISHED: FINISHED,
+                    CANCELLED: CANCELLED,
+                    IDLE: IDLE,
+                    FAILED: FAILED
+				};
+			},
+
+			mounted() {
+				this.getInstallProgress();
+			},
+
+			methods: {
+				onSelectDirectoryClicked() {
+					this.files = [];
+					this.error = null;
+					this.warning = null;
+
+					axios.post('installer/select-directory', { path: this.path })
+						.then((response) => {
+							if (response.data.result) {
+								this.files = response.data.result;
+							} else if (response.data.error) {
+								this.error = response.data.error;
+							}
+						})
+						.catch((error) => {
+							this.error = error;
+							console.error(error);
+						});
+				},
+
+				convertBytesToHumanSize(bytes, decimals) {
+					if (bytes == 0) return '0 Bytes';
+
+					let k = 1024,
+						dm = decimals <= 0 ? 0 : decimals || 2,
+						sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'],
+						i = Math.floor(Math.log(bytes) / Math.log(k));
+
+					return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+				},
+
+				getTitleId(filename) {
+					let regExp = /(?<=\[).+?(?=\])/g;
+					let matches = filename.match(regExp);
+
+					return matches && matches.length > 0 ? matches[0] : '-';
+				},
+
+				getTitleVersion(filename) {
+					let regExp = /(?<=\[).+?(?=\])/g;
+					let matches = filename.match(regExp);
+
+					if (matches && matches.length > 1) {
+						return matches[1].replace('v', '');
+					}
+
+					return '-';
+				},
+
+				onFileClicked(file) {
+					if (!file.selected) {
+						this.selected.push(file);
+					} else {
+						const index = this.selected.findIndex(x => x.name === file.name);
+						this.selected.splice(index, 1);
+					}
+
+					file.selected = !file.selected;
+				},
+
+				onInstallCicked() {
+					axios.post('installer/install', this.selected)
+						.then((response) => {
+							if (response.data) {
+								this.setInstaller(response.data);
+                                this.getInstallProgress(true);
+							} else if (response.data.error) {
+								this.error = response.data.error;
+							}
+						})
+						.catch((error) => {
+							this.error = error;
+							console.error(error);
+						});
+				},
+
+				getInstallProgress(poll = false) {
+					axios.get('installer/progress')
+						.then((response) => {
+							if (response.data) {
+								this.setInstaller(response.data);
+
+                                if(poll) {
+                                    if(this.installer.status === INSTALLING || this.installer.status === AWAITINGUSERINPUT) {
+                                        setTimeout(() => {
+                                            this.getInstallProgress(true);
+                                        }, 1000);
+                                    }
+                                }
+
+							} else if (response.data.error) {
+								this.error = response.data.error;
+							}
+						})
+						.catch((error) => {
+							this.error = error;
+							console.error(error);
+						});
+				},
+
+				setInstaller(data) {
+					this.installer = data;                    
+                    this.warning = null;
+                    this.error = null;
+
+					if (data.status === ABORTED) {
+						this.error = 'Installer has been aborted by user interaction';
+					} else if(data.status === CANCELLED) {
+						this.error = 'An error occured during installing';
+                    } else if (data.status === AWAITINGUSERINPUT) {
+						this.warning = 'Follow the steps in Goldleaf on the Switch to continue';
+					}
+				},
+
+				onAbortClicked() {
+					if (confirm('Are you sure you want to abort the installation?')) {
+						axios.post('installer/abort')
+							.then((response) => {
+								if (response.data) {
+									this.setInstaller(response.data);
+								} else if (response.data.error) {
+									this.error = response.data.error;
+								}
+							})
+							.catch((error) => {
+								this.error = error;
+								console.error(error);
+							});
+					}
+				},
+
+                onCompleteClicked() {
+                    axios.post('installer/complete')
+                        .then((response) => {
+                            if (response.data) {
+                                this.setInstaller(response.data);
+                            } else if (response.data.error) {
+                                this.error = response.data.error;
+                            }
+                        })
+                        .catch((error) => {
+                            this.error = error;
+                            console.error(error);
+                        });
+                }
+			},
+
+			computed: {
+				installerProgress() {
+					return this.installer.status === INSTALLING ? this.installer.files.findIndex(x => x.name === this.installer.currentFile.name) : 0;
+				}
+			}
+		});
+	</script>
+}
