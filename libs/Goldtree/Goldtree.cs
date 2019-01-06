@@ -7,17 +7,18 @@ using System.Threading.Tasks;
 using Goldtree.Commands;
 using Goldtree.Commands.Enums;
 using Goldtree.Enums;
+using Goldtree.Extensions;
 using Goldtree.Models;
 using LibHac;
 using LibHac.IO;
-using libusbK;
+using LibUsb.Windows;
 
 namespace Goldtree
 {
     public class Goldtree
     {
         private UsbK _usb = null;
-        
+
         public Goldtree() { }
 
         private void AddError(string message)
@@ -82,7 +83,7 @@ namespace Goldtree
             {
                 foreach (var fileContainer in files)
                 {
-                    if(fileContainer.State == InstallState.Installing || fileContainer.State == InstallState.Failed) continue;
+                    if (fileContainer.State == InstallState.Installing || fileContainer.State == InstallState.Failed || fileContainer.State == InstallState.Cancelled) continue;
                     ApplicationState.Progress = 0;
                     ApplicationState.CurrentFile = fileContainer;
                     ApplicationState.InstallState = InstallState.AwaitingUserInput;
@@ -228,7 +229,7 @@ namespace Goldtree
                                                     else
                                                     {
                                                         AddError("Invalid command received. Are you sure Goldleaf is active?");
-                                                        ApplicationState.InstallState = InstallState.Cancelled;
+                                                        ApplicationState.InstallState = InstallState.Failed;
                                                         fileContainer.State = InstallState.Failed;
                                                         break;
                                                     }
@@ -245,25 +246,28 @@ namespace Goldtree
                                     }
                                     catch (Exception ex)
                                     {
+                                        AddError("An error occured opening the select NSP. Are you sure it's a valid NSP?");
                                         Console.WriteLine(ex.Message);
                                         Console.WriteLine(ex.StackTrace);
-                                        AddError("An error occured opening the select NSP. Are you sure it's a valid NSP?");
                                         fileContainer.State = InstallState.Failed;
                                     }
                                 }
                                 else if (startCommand.IsCommandId(CommandIds.Finish))
                                 {
                                     AddError("Goldleaf has cancelled the installation");
+                                    fileContainer.State = InstallState.Cancelled;
                                 }
                                 else
                                 {
                                     AddError("Invalid command received. Are you sure Goldleaf is active?");
+                                    fileContainer.State = InstallState.Failed;
                                     ApplicationState.InstallState = InstallState.Cancelled;
                                 }
                             }
                             else
                             {
                                 AddError("Invalid command received. Are you sure Goldleaf is active?");
+                                fileContainer.State = InstallState.Failed;
                                 ApplicationState.InstallState = InstallState.Cancelled;
                             }
                         }

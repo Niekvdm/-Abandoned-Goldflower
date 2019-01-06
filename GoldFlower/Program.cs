@@ -21,10 +21,6 @@ namespace GoldFlower
             WebHost.CreateDefaultBuilder(args)
                 .UseStartup<Startup>()
                 .UseUrls("http://0.0.0.0:8181")
-                .ConfigureLogging(config =>
-                {
-                    config.ClearProviders();
-                })
                 .Build();
     }
 }

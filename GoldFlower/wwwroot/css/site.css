@@ -2,6 +2,24 @@
 	cursor: pointer;
 }
 
+.installer-events {
+    overflow-y: auto;
+    max-height: 200px;
+    margin-bottom: 20px;
+}
+
+.file-state-0 {
+    background-color: rgba(211, 211, 61, 0.3);
+}
+
+.file-state-3 {
+    background-color: rgba(0, 255, 0, 0.3);
+}
+
+.file-state-6 {
+    background-color: rgba(255, 0, 0, 0.3);
+}
+
 .header {
     margin-top: 50px;
 }
