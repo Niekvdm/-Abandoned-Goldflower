@@ -1,4 +1,4 @@
-#region Copyright (c) Travis Robinson
+﻿#region Copyright (c) Travis Robinson
 
 // Copyright (c) 2012 Travis Robinson <libusbdotnet@gmail.com>
 // All rights reserved.
@@ -29,7 +29,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace libusbK
+namespace LibUsb.Windows
 {
     public static class Stuff
     {

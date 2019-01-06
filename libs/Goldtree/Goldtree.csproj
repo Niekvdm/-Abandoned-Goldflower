@@ -6,7 +6,10 @@
 
   <ItemGroup>
     <PackageReference Include="LibHac" Version="0.2.0" />
-    <PackageReference Include="LibUsbDotNet" Version="3.0.48-alpha" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LibUsb\LibUsb.csproj" />
   </ItemGroup>
 
 </Project>

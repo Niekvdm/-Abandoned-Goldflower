@@ -42,10 +42,12 @@ namespace Goldtree
             {
                 MessageBag = new Dictionary<string, List<string>>();
             }
+
+            MessageBag.Clear();
             
             ApplicationState.InstallState = InstallState.Installing;
+            ApplicationState.CurrentFile = files.FirstOrDefault(x => x.State.Equals(InstallState.Idle));
             ApplicationState.Files = files;
-            ApplicationState.CurrentFile = files.FirstOrDefault();
 
             _runner = new Thread(() =>
             {
@@ -63,6 +65,7 @@ namespace Goldtree
             ApplicationState.CurrentFile = null;
             ApplicationState.Files = null;
             ApplicationState.Progress = 0;
+            ApplicationState.InstallState = InstallState.Idle;
             ApplicationState.MessageBag.Clear();
         }
     }

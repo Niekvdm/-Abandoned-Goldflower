@@ -16,9 +16,16 @@ namespace GoldFlower.Controllers
 {
     public class HomeController : Controller
     {
+        private readonly IWritableOptions<ApplicationSettings> _options;
+
+        public HomeController(IWritableOptions<ApplicationSettings> options)
+        {
+            _options = options;
+        }
+
         public IActionResult Index()
         {
-            ViewBag.Path = System.IO.File.Exists($"{Environment.CurrentDirectory}/config.txt") ? System.IO.File.ReadAllText($"{Environment.CurrentDirectory}/config.txt") : "";
+            ViewBag.Path = _options.Value.Path;
 
             return View();
         }
@@ -46,7 +53,10 @@ namespace GoldFlower.Controllers
                     });
                 }
 
-                System.IO.File.WriteAllText($"{Environment.CurrentDirectory}/config.txt", directoryContainer?.Path);
+                _options.Update(options =>
+                {
+                    options.Path = directoryContainer?.Path;
+                });
             }
             catch (Exception ex)
             {
@@ -80,7 +90,7 @@ namespace GoldFlower.Controllers
         {
             ApplicationState.Complete();
 
-            return new JsonResult(new { Status = InstallState.Idle, Progress = ApplicationState.Progress, CurrentFile = ApplicationState.CurrentFile, Files = ApplicationState.Files, Events = ApplicationState.MessageBag });
+            return new JsonResult(new { Status = ApplicationState.InstallState, Progress = ApplicationState.Progress, CurrentFile = ApplicationState.CurrentFile, Files = ApplicationState.Files, Events = ApplicationState.MessageBag });
         }
 
         [HttpGet]

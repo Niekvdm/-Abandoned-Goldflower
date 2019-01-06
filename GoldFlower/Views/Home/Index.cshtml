@@ -15,19 +15,43 @@
 					<div class="content-header-wrapper">
 						<h2 class="title">My NSP(s)</h2>
 
-						<div class="alert-container">
+						<div class="alert-container">                            
 							<div class="alert alert-danger" v-if="error">
 								<strong>Error:</strong>
 								<p>
 									{{ error }}
 								</p>
 							</div>
+                            
 							<div class="alert alert-warning" v-if="warning">
 								<strong>Warning:</strong>
 								<p>
 									{{ warning }}
 								</p>
 							</div>
+
+                            <div v-if="installer.events" class="installer-events">
+                                <div class="alert alert-danger" v-if="installer.events.error">
+                                    <ul>
+                                        <li v-for="(item, index) in installer.events.error" :key="index">{{ item }}</li>
+                                    </ul>
+                                </div>
+                                <div class="alert alert-warning" v-if="installer.events.warning">
+                                    <ul>
+                                        <li v-for="(item, index) in installer.events.warning" :key="index">{{ item }}</li>
+                                    </ul>
+                                </div>
+                                <div class="alert alert-success" v-if="installer.events.success">
+                                    <ul>
+                                        <li v-for="(item, index) in installer.events.success" :key="index">{{ item }}</li>
+                                    </ul>
+                                </div>
+                                <div class="alert alert-info" v-if="installer.events.info">
+                                    <ul>
+                                        <li v-for="(item, index) in installer.events.info" :key="index">{{ item }}</li>
+                                    </ul>
+                                </div>
+                            </div>
 						</div>
 
 						<div class="actions" v-if="installer.status === IDLE || installer.status === ABORTED || installer.status === CANCELLED">
@@ -146,11 +170,12 @@
 										</tr>
 									</thead>
 									<tbody>
-										<tr v-for="(file, index) in installer.files" :key="index">
+										<tr v-for="(file, index) in installer.files" :key="index" :class="`file-state-${file.state}`">
 											<td class="type">
 												<i v-if="file.state === INSTALLING" class="fa fa-spin fa-circle-o-notch"></i>
 												<i v-else-if="file.state === FINISHED" class="fa fa-check text-success"></i>
 												<i v-else-if="file.state === FAILED" class="fa fa-close text-danger"></i>
+												<i v-else-if="file.state === CANCELLED" class="fa fa-close text-danger"></i>
 												<i v-else="file.state === IDLE" class="fa fa-ellipsis-h"></i>
 											</td>
 
@@ -175,29 +200,6 @@
 							</div>
 						</div>
 					</template>
-
-                    <div v-if="installer.events">
-                        <div class="alert alert-danger" v-if="installer.events.error">
-                            <ul>
-                                <li v-for="(item, index) in installer.events.error" :key="index">{{ item }}</li>
-                            </ul>
-                        </div>
-                        <div class="alert alert-warning" v-if="installer.events.warning">
-                            <ul>
-                                <li v-for="(item, index) in installer.events.warning" :key="index">{{ item }}</li>
-                            </ul>
-                        </div>
-                        <div class="alert alert-success" v-if="installer.events.success">
-                            <ul>
-                                <li v-for="(item, index) in installer.events.success" :key="index">{{ item }}</li>
-                            </ul>
-                        </div>
-                        <div class="alert alert-info" v-if="installer.events.info">
-                            <ul>
-                                <li v-for="(item, index) in installer.events.info" :key="index">{{ item }}</li>
-                            </ul>
-                        </div>
-                    </div>
 				</div>
 			</div>
 		</section>
@@ -381,6 +383,7 @@
                         .then((response) => {
                             if (response.data) {
                                 this.setInstaller(response.data);
+                                this.selected = [];
                             } else if (response.data.error) {
                                 this.error = response.data.error;
                             }
