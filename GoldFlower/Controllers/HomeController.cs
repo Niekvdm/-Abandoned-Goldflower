@@ -71,7 +71,8 @@ namespace GoldFlower.Controllers
 		[Route("/installer/install")]
 		public IActionResult Install([FromBody] List<FileContainer> files)
 		{
-			App.Instance.SetProcessor(new Goldtree.Goldtree());
+            App.Instance.SetProcessor(new Tinfoil.Tinfoil());
+			//App.Instance.SetProcessor(new Goldtree.Goldtree());
 			App.Instance.SetFiles(files);
 			App.Instance.Install();
 
@@ -91,7 +92,7 @@ namespace GoldFlower.Controllers
 		[Route("/installer/complete")]
 		public IActionResult CompleteInstaller()
 		{
-			//App.Instance.Complete();
+			App.Instance.Complete();
 
 			return new JsonResult(new { Status = App.Instance.InstallState, Progress = App.Instance.Progress, CurrentFile = App.Instance.CurrentFile, Files = App.Instance.Files, Events = App.Instance.Logger.MessageBag });
 		}

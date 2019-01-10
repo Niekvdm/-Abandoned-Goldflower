@@ -382,8 +382,9 @@
                     axios.post('installer/complete')
                         .then((response) => {
                             if (response.data) {
-                                this.setInstaller(response.data);
                                 this.selected = [];
+                                this.setInstaller(response.data);
+								this.$forceUpdate();
                             } else if (response.data.error) {
                                 this.error = response.data.error;
                             }

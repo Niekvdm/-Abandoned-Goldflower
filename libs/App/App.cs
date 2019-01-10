@@ -78,7 +78,7 @@ namespace GoldFlower
 			Progress = 0;
 		}
 
-		public void Completed()
+		public void Complete()
 		{
 			CurrentFile = null;
 			Files = null;
@@ -109,6 +109,7 @@ namespace GoldFlower
 
 		private void OnInstallStateChanged(InstallStateChangedEventArgs e)
 		{
+			if(InstallState == InstallState.Cancelled && e.State == InstallState.Finished) return; 
 			InstallState = e.State;
 		}
 
