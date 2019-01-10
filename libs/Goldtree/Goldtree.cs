@@ -6,59 +6,33 @@ using System.Threading;
 using System.Threading.Tasks;
 using Goldtree.Commands;
 using Goldtree.Commands.Enums;
-using Goldtree.Enums;
+using App.Data.Enums;
 using Goldtree.Extensions;
-using Goldtree.Models;
+using App.Data.Models;
+using App;
+using Logger;
 using LibHac;
 using LibHac.IO;
 using LibUsb.Windows;
+using App.Data.Interfaces;
+using App.Data.Events;
 
 namespace Goldtree
 {
-    public class Goldtree
+    public class Goldtree : IManagerDelegates, IProcessor
     {
         private UsbK _usb = null;
 
-        public Goldtree() { }
+        public event ProgressChanged OnProgressChanged;
+        public event FileChanged OnFileChanged;
+        public event FileStateChanged OnFileStateChanged;
+        public event InstallStateChanged OnInstallStateChanged;
+        public event MessageReceived OnMessageReceived;
 
-        private void AddError(string message)
+        public bool IsRunning { get; set; } = true;
+
+        public void Install(List<FileContainer> files)
         {
-            AddMessage("error", message);
-        }
-
-        private void AddWarning(string message)
-        {
-            AddMessage("warning", message);
-        }
-
-        private void AddInfo(string message)
-        {
-            AddMessage("info", message);
-        }
-
-        private void AddSuccess(string message)
-        {
-            AddMessage("success", message);
-        }
-
-        private void AddMessage(string type, string message)
-        {
-            message = $"[{DateTime.Now.ToShortTimeString()}] {message}";
-
-            if (!ApplicationState.MessageBag.ContainsKey(type))
-            {
-                ApplicationState.MessageBag.Add(type, new List<string>());
-            }
-
-            ApplicationState.MessageBag[type].Add(message);
-
-            Console.WriteLine(message);
-        }
-
-        public void Install()
-        {
-            var files = ApplicationState.Files;
-
             try
             {
                 // Try to connect to the switch
@@ -74,8 +48,8 @@ namespace Goldtree
                 Console.WriteLine(ex.Message);
                 Console.WriteLine(ex.StackTrace);
 
-                ApplicationState.InstallState = InstallState.Cancelled;
-                AddError("No usb connection found. Are you sure the Switch is connected and that you have the correct USB drivers installed?");
+                NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled, "No usb connection found. Are you sure the Switch is connected and that you have the correct USB drivers installed?"));
+                NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "No usb connection found. Are you sure the Switch is connected and that you have the correct USB drivers installed?"));
                 return;
             }
 
@@ -84,16 +58,17 @@ namespace Goldtree
                 foreach (var fileContainer in files)
                 {
                     if (fileContainer.State == InstallState.Installing || fileContainer.State == InstallState.Failed || fileContainer.State == InstallState.Cancelled) continue;
-                    ApplicationState.Progress = 0;
-                    ApplicationState.CurrentFile = fileContainer;
-                    ApplicationState.InstallState = InstallState.AwaitingUserInput;
 
-                    AddInfo($"Processing {fileContainer.Name}");
+                    NotifyProgressChanged(new ProgressChangedEventArgs(0));
+                    NotifyFileChanged(new FileChangedEventArgs(fileContainer));
+                    NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.AwaitingUserInput, "Awaiting user input on the Switch"));
+
+                    NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Info, $"Processing {fileContainer.Name}"));
 
                     var connectionRequestCommand = new Command(CommandIds.ConnectionRequest);
                     _usb.Write(connectionRequestCommand);
 
-                    AddInfo("Attempting to connect to Goldleaf through USB...");
+                    NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Info, "Attempting to connect to Goldleaf through USB..."));
 
                     var connectionResponseCommand = _usb.Read();
 
@@ -101,15 +76,15 @@ namespace Goldtree
                     {
                         if (connectionResponseCommand.IsCommandId(CommandIds.ConnectionResponse))
                         {
-                            ApplicationState.InstallState = InstallState.Installing;
-                            AddInfo("Connection established with Goldleaf");
+                            NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Installing));
+                            NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Info, "Connection established with Goldleaf"));
 
                             var nspNameCommand = new Command(CommandIds.NSPName);
                             _usb.Write(nspNameCommand);
                             _usb.Write((uint)fileContainer.Name.Length);
                             _usb.Write(fileContainer.Name);
 
-                            AddInfo("NSP info was sent to Goldleaf. Waiting for approval...");
+                            NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Info, "NSP info was sent to Goldleaf. Waiting for approval..."));
 
                             var startCommand = _usb.Read();
 
@@ -117,9 +92,9 @@ namespace Goldtree
                             {
                                 if (startCommand.IsCommandId(CommandIds.Start))
                                 {
-                                    AddInfo("Goldleaf is ready for installation");
+                                    NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Info, "Goldleaf is ready for installation"));
 
-                                    fileContainer.State = InstallState.Installing;
+                                    NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Installing));
 
                                     try
                                     {
@@ -155,7 +130,7 @@ namespace Goldtree
 
                                         using (var br = new BinaryReader(fs))
                                         {
-                                            while (ApplicationState.InstallState.Equals(InstallState.Installing))
+                                            while (IsRunning)
                                             {
                                                 var mainStreamCommand = _usb.Read();
 
@@ -165,9 +140,9 @@ namespace Goldtree
                                                     {
                                                         _usb.Read(out uint idx);
 
-                                                        ApplicationState.Progress = 0;
+                                                        NotifyProgressChanged(new ProgressChangedEventArgs(0));
 
-                                                        AddInfo($"Sending content \"{pnsp.Files[idx].Name}\"... {(idx + 1)} / {pnsp.Files.Length}");
+                                                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, $"Sending content \"{pnsp.Files[idx].Name}\"... {(idx + 1)} / {pnsp.Files.Length}"));
 
                                                         PfsFileEntry ent = pnsp.Files[idx];
                                                         long rsize = 1048576;
@@ -179,7 +154,7 @@ namespace Goldtree
 
                                                         while ((tmpread > 0) && (toread > 0) && (coffset < (coffset + ent.Size)))
                                                         {
-                                                            ApplicationState.Progress = (int)(bytesSent * 100 / ent.Size);
+                                                            NotifyProgressChanged(new ProgressChangedEventArgs((int)(bytesSent * 100 / ent.Size)));
                                                             if (rsize >= ent.Size) rsize = ent.Size;
                                                             int tor = (int)Math.Min(rsize, toread);
                                                             bufb = new byte[tor];
@@ -193,52 +168,53 @@ namespace Goldtree
                                                             toread -= tmpread;
                                                         }
 
-                                                        ApplicationState.Progress = 100;
-                                                        AddInfo("Content was sent to Goldleaf");
+                                                        NotifyProgressChanged(new ProgressChangedEventArgs(100));
+
+                                                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Content was sent to Goldleaf"));
                                                     }
                                                     else if (mainStreamCommand.IsCommandId(CommandIds.NSPTicket))
                                                     {
-                                                        ApplicationState.Progress = 0;
-                                                        AddInfo("Sending ticket file...");
+                                                        NotifyProgressChanged(new ProgressChangedEventArgs(0));
+                                                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Sending ticket file..."));
 
                                                         PfsFileEntry tik = pnsp.Files[tikidx];
                                                         br.BaseStream.Seek(pnsp.HeaderSize + tik.Offset, SeekOrigin.Begin);
                                                         byte[] file = br.ReadBytes((int)tik.Size);
                                                         _usb.Write(file);
 
-                                                        ApplicationState.Progress = 100;
-                                                        AddInfo("Ticket was sent to Goldleaf.");
+                                                        NotifyProgressChanged(new ProgressChangedEventArgs(100));
+                                                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Ticket was sent to Goldleaf."));
                                                     }
                                                     else if (mainStreamCommand.IsCommandId(CommandIds.NSPCert))
                                                     {
-                                                        ApplicationState.Progress = 0;
-                                                        AddInfo("Sending certificate file...");
+                                                        NotifyProgressChanged(new ProgressChangedEventArgs(0));
+                                                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Sending certificate file..."));
 
                                                         PfsFileEntry cert = pnsp.Files[certidx];
                                                         br.BaseStream.Seek(pnsp.HeaderSize + cert.Offset, SeekOrigin.Begin);
                                                         byte[] file = br.ReadBytes((int)cert.Size);
                                                         _usb.Write(file);
-                                                        ApplicationState.Progress = 100;
-                                                        AddInfo("Certificate was sent to Goldleaf.");
+                                                        NotifyProgressChanged(new ProgressChangedEventArgs(100));
+                                                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Certificate was sent to Goldleaf."));
                                                     }
                                                     else if (mainStreamCommand.IsCommandId(CommandIds.Finish))
                                                     {
-                                                        fileContainer.State = InstallState.Finished;
+                                                        NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Finished));
                                                         break;
                                                     }
                                                     else
                                                     {
-                                                        AddError("Invalid command received. Are you sure Goldleaf is active?");
-                                                        ApplicationState.InstallState = InstallState.Failed;
-                                                        fileContainer.State = InstallState.Failed;
+                                                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Invalid command received. Are you sure Goldleaf is active?"));
+                                                        NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Failed));
+                                                        NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Failed));
                                                         break;
                                                     }
                                                 }
                                                 else
                                                 {
-                                                    AddError("Invalid command received. Are you sure Goldleaf is active?");
-                                                    ApplicationState.InstallState = InstallState.Cancelled;
-                                                    fileContainer.State = InstallState.Failed;
+                                                    NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Invalid command received. Are you sure Goldleaf is active?"));
+                                                    NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled));
+                                                    NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Failed));
                                                     break;
                                                 }
                                             }
@@ -246,74 +222,70 @@ namespace Goldtree
                                     }
                                     catch (Exception ex)
                                     {
-                                        AddError("An error occured opening the select NSP. Are you sure it's a valid NSP?");
+                                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "An error occured opening the select NSP. Are you sure it's a valid NSP?"));
                                         Console.WriteLine(ex.Message);
                                         Console.WriteLine(ex.StackTrace);
-                                        fileContainer.State = InstallState.Failed;
+                                        NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Failed));
                                     }
                                 }
                                 else if (startCommand.IsCommandId(CommandIds.Finish))
                                 {
-                                    AddError("Goldleaf has cancelled the installation");
-                                    fileContainer.State = InstallState.Cancelled;
+                                    NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Goldleaf has cancelled the installation"));
+                                    NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Cancelled));
                                 }
                                 else
                                 {
-                                    AddError("Invalid command received. Are you sure Goldleaf is active?");
-                                    fileContainer.State = InstallState.Failed;
-                                    ApplicationState.InstallState = InstallState.Cancelled;
+                                    NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Invalid command received. Are you sure Goldleaf is active?"));
+                                    NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Failed));
+                                    NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled));
                                 }
                             }
                             else
                             {
-                                AddError("Invalid command received. Are you sure Goldleaf is active?");
-                                fileContainer.State = InstallState.Failed;
-                                ApplicationState.InstallState = InstallState.Cancelled;
+                                NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Invalid command received. Are you sure Goldleaf is active?"));
+                                NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Failed));
+                                NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled));
                             }
                         }
                         else if (connectionResponseCommand.IsCommandId(CommandIds.Finish))
                         {
-                            AddError("Goldleaf has cancelled the installation");
+                            NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Goldleaf has cancelled the installation"));
                         }
                         else
                         {
-                            AddError("Invalid command received. Are you sure Goldleaf is active?");
-                            ApplicationState.InstallState = InstallState.Cancelled;
+                            NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Invalid command received. Are you sure Goldleaf is active?"));
+                            NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled));
                         }
                     }
                     else
                     {
-                        AddError("Invalid command received. Are you sure Goldleaf is active?");
-                        ApplicationState.InstallState = InstallState.Cancelled;
+                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Invalid command received. Are you sure Goldleaf is active?"));
+                        NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled));
                     }
                 }
                 // }
                 // else
                 // {
                 //     AddWarning("Unable to connect to Goldleaf. Are you sure Goldleaf is active and you have the correct USB drivers installed?");
-                //     ApplicationState.InstallState = InstallState.Cancelled;
+                //     Manager.InstallState = InstallState.Cancelled;
                 // }
             }
             catch (Exception ex)
             {
-                ApplicationState.InstallState = InstallState.Cancelled;
+                NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled));
                 Console.WriteLine(ex.Message);
                 Console.WriteLine(ex.StackTrace);
             }
 
 
-            if (ApplicationState.InstallState != InstallState.Cancelled)
-            {
-                AddSuccess("Finished installing");
-                ApplicationState.InstallState = InstallState.Finished;
-            }
+            NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Finished));
 
             Close();
         }
 
         public void Abort()
         {
-            ApplicationState.InstallState = InstallState.Aborted;
+            NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Aborted));
             Close();
         }
 
@@ -329,6 +301,36 @@ namespace Goldtree
                 }
                 catch { }
             }
+        }
+
+        public void NotifyProgressChanged(ProgressChangedEventArgs e)
+        {
+            OnProgressChanged?.Invoke(e);
+        }
+
+        public void NotifyFileChanged(FileChangedEventArgs e)
+        {
+            OnFileChanged?.Invoke(e);
+        }
+
+        public void NotifyFileStateChanged(FileStateChangedEventArgs e)
+        {
+            OnFileStateChanged?.Invoke(e);
+        }
+
+        public void NotifyInstallStateChanged(InstallStateChangedEventArgs e)
+        {
+            if (e.State == InstallState.Cancelled || e.State == InstallState.Aborted || e.State == InstallState.Failed)
+            {
+                IsRunning = false;
+            }
+
+            OnInstallStateChanged?.Invoke(e);
+        }
+
+        public void NotifiyMessageReceived(MessageReceivedEventArgs e)
+        {
+            OnMessageReceived?.Invoke(e);
         }
     }
 }
