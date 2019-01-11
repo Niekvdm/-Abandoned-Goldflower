@@ -87,6 +87,18 @@ namespace GoldFlower
 			InstallState = InstallState.Idle;
 		}
 
+		public AppState GetAppState()
+		{
+			return new AppState()
+			{
+				Status = App.Instance.InstallState,
+				Progress = App.Instance.Progress,
+				CurrentFile = App.Instance.CurrentFile,
+				Files = App.Instance.Files,
+				Events = App.Instance.Logger.MessageBag
+			};
+		}
+
 		private void OnProgressChanged(ProgressChangedEventArgs e)
 		{
 			Progress = e.Percentage;

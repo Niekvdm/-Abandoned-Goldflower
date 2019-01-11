@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using App.Data.Enums;
 using App.Data.Models;
+using Logger;
 
 namespace GoldFlower
 {
@@ -11,6 +12,6 @@ namespace GoldFlower
 		public int Progress { get; set; }
 		public List<FileContainer> Files { get; set; }
 		public FileContainer CurrentFile { get; set; }
-		public Dictionary<string, List<string>> Events { get; set; }
+		public List<MessageItem> Events { get; set; }
 	}
 }

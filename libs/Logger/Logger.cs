@@ -5,13 +5,20 @@ namespace Logger
 	using App.Data;
 	using App.Data.Enums;
 
+	public class MessageItem
+	{
+		public MessageType Type { get; set; }
+		public DateTime DateTime { get; set; }
+		public string Message { get; set; }
+	}
+
 	public class Logger
 	{
-		public Dictionary<string, List<string>> MessageBag { get; set; }
+		public List<MessageItem> MessageBag { get; set; }
 
 		public Logger()
 		{
-			MessageBag = new Dictionary<string, List<string>>();
+			MessageBag = new List<MessageItem>();
 		}
 
 		public void AddError(string message)
@@ -36,16 +43,14 @@ namespace Logger
 
 		public void AddMessage(MessageType type, string message)
 		{
-			message = $"[{DateTime.Now.ToShortTimeString()}] {message}";
-
-			if (!MessageBag.ContainsKey(type.ToString()))
+			MessageBag.Add(new MessageItem()
 			{
-				MessageBag.Add(type.ToString(), new List<string>());
-			}
+				Type = type,
+				DateTime = DateTime.Now,
+				Message = message
+			});
 
-			MessageBag[type.ToString()].Add(message);
-
-			Console.WriteLine(message);
+			Console.WriteLine($"[{DateTime.Now.ToShortTimeString()}] {message}");
 		}
 	}
 }
