@@ -26,10 +26,9 @@
 											<div class="col-md-6 col-sm-6 col-xs-6"><strong>Events</strong></div>
 										</div>
 									</div>
-									<!-- end notify title -->
-									<!-- notify content -->
+
 									<div class="drop-content">
-										<li v-for="(item, index) in events" :key="index">
+										<li v-for="(item, index) in sortedEvents" :key="index">
 											<div class="col-md-12 col-sm-12 col-xs-12">
 												<span :class="`label label-${convertErrorTypeToClass(item.type)} pull-right`">
 													{{ new Date(item.dateTime).toLocaleTimeString() }}
@@ -443,6 +442,10 @@
 			computed: {
 				installerProgress() {
 					return this.installer.status === INSTALLING ? this.installer.files.findIndex(x => x.name === this.installer.currentFile.name) : 0;
+				},
+
+				sortedEvents() {
+					return this.events.sort((a,b) => (a.dateTime < b.dateTime) ? 1 : ((b.dateTime < a.dateTime) ? -1 : 0));
 				}
 			}
 		});
