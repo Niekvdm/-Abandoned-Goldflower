@@ -68,11 +68,20 @@ namespace GoldFlower.Controllers
 		}
 
 		[HttpPost]
-		[Route("/installer/install")]
-		public IActionResult Install([FromBody] List<FileContainer> files)
+		[Route("/installer/install/{processor}")]
+		public IActionResult Install([FromBody] List<FileContainer> files, ProcessorType processor)
 		{
-            App.Instance.SetProcessor(new Tinfoil.Tinfoil());
-			//App.Instance.SetProcessor(new Goldtree.Goldtree());
+			switch (processor)
+			{
+				case ProcessorType.Tinfoil:
+					App.Instance.SetProcessor(new Tinfoil.Tinfoil());
+					break;
+
+				case ProcessorType.Goldleaf:
+					App.Instance.SetProcessor(new Goldtree.Goldtree());
+					break;
+			}
+
 			App.Instance.SetFiles(files);
 			App.Instance.Install();
 

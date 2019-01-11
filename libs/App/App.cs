@@ -94,7 +94,10 @@ namespace GoldFlower
 
 		private void OnFileChanged(FileChangedEventArgs e)
 		{
-			CurrentFile = e.File;
+			if (CurrentFile != e.File)
+			{
+				CurrentFile = e.File;
+			}
 		}
 
 		private void OnFileStateChanged(FileStateChangedEventArgs e)
@@ -109,7 +112,7 @@ namespace GoldFlower
 
 		private void OnInstallStateChanged(InstallStateChangedEventArgs e)
 		{
-			if(InstallState == InstallState.Cancelled && e.State == InstallState.Finished) return; 
+			if (InstallState == InstallState.Cancelled && e.State == InstallState.Finished) return;
 			InstallState = e.State;
 		}
 
