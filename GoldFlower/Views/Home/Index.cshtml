@@ -72,8 +72,13 @@
 						</p>
 
 						<div class="actions clearfix">
-							<button class="btn btn-primary pull-right" v-on:click="onInstallCicked" :disabled="!selected.length">
-								<span class="fa fa-upload"></span> Install selected NSP(s)
+							<button class="btn btn-primary pull-right" v-on:click="onInstallCicked(processors.TINFOIL)" :disabled="!selected.length">
+								<span class="fa fa-upload"></span> Install with Tinfoil
+							</button>
+
+							
+							<button class="btn btn-primary pull-right" v-on:click="onInstallCicked(processors.GOLDLEAF)" :disabled="!selected.length">
+								<span class="fa fa-upload"></span> Install with Goldleaf
 							</button>
 						</div>
 
@@ -122,8 +127,13 @@
 						</div>
 
 						<div class="actions clearfix">
-							<button class="btn btn-primary pull-right" v-on:click="onInstallCicked" :disabled="!selected.length">
-								<span class="fa fa-upload"></span> Install selected NSP(s)
+							<button class="btn btn-primary pull-right" v-on:click="onInstallCicked(processors.TINFOIL)" :disabled="!selected.length">
+								<span class="fa fa-upload"></span> Install with Tinfoil
+							</button>
+
+							
+							<button class="btn btn-primary pull-right" v-on:click="onInstallCicked(processors.GOLDLEAF)" :disabled="!selected.length">
+								<span class="fa fa-upload"></span> Install with Goldleaf
 							</button>
 						</div>
 					</template>
@@ -239,7 +249,11 @@
 					FINISHED: FINISHED,
                     CANCELLED: CANCELLED,
                     IDLE: IDLE,
-                    FAILED: FAILED
+                    FAILED: FAILED,
+					processors: {
+						TINFOIL: 0,
+						GOLDLEAF: 1
+					}
 				};
 			},
 
@@ -307,8 +321,8 @@
 					file.selected = !file.selected;
 				},
 
-				onInstallCicked() {
-					axios.post('installer/install', this.selected)
+				onInstallCicked(processor) {
+					axios.post(`installer/install/{processor}`, this.selected)
 						.then((response) => {
 							if (response.data) {
 								this.setInstaller(response.data);
