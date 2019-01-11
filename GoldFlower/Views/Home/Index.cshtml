@@ -31,24 +31,34 @@
 							</div>
 
                             <div v-if="installer.events" class="installer-events">
-                                <div class="alert alert-danger" v-if="installer.events.error">
+                                <div class="alert alert-danger" v-if="installer.events.Error">
+									<strong>Error:</strong>
                                     <ul>
-                                        <li v-for="(item, index) in installer.events.error" :key="index">{{ item }}</li>
+                                        <li v-for="(item, index) in installer.events.Error" :key="index">{{ item }}</li>
                                     </ul>
                                 </div>
-                                <div class="alert alert-warning" v-if="installer.events.warning">
+                                <div class="alert alert-warning" v-if="installer.events.Warning">
+									<strong>Warning:</strong>
                                     <ul>
-                                        <li v-for="(item, index) in installer.events.warning" :key="index">{{ item }}</li>
+                                        <li v-for="(item, index) in installer.events.Warning" :key="index">{{ item }}</li>
                                     </ul>
                                 </div>
-                                <div class="alert alert-success" v-if="installer.events.success">
+                                <div class="alert alert-success" v-if="installer.events.Success">
+									<strong>Success:</strong>
                                     <ul>
-                                        <li v-for="(item, index) in installer.events.success" :key="index">{{ item }}</li>
+                                        <li v-for="(item, index) in installer.events.Success" :key="index">{{ item }}</li>
                                     </ul>
                                 </div>
-                                <div class="alert alert-info" v-if="installer.events.info">
+                                <div class="alert alert-info" v-if="installer.events.Info">
+									<strong>Info:</strong>
                                     <ul>
-                                        <li v-for="(item, index) in installer.events.info" :key="index">{{ item }}</li>
+                                        <li v-for="(item, index) in installer.events.Info" :key="index">{{ item }}</li>
+                                    </ul>
+                                </div>								
+                                <div class="alert alert-info" v-if="installer.events.Debug">
+									<strong>Debug:</strong>
+                                    <ul>
+                                        <li v-for="(item, index) in installer.events.Debug" :key="index">{{ item }}</li>
                                     </ul>
                                 </div>
                             </div>
@@ -72,14 +82,15 @@
 						</p>
 
 						<div class="actions clearfix">
-							<button class="btn btn-primary pull-right" v-on:click="onInstallCicked(processors.TINFOIL)" :disabled="!selected.length">
-								<span class="fa fa-upload"></span> Install with Tinfoil
-							</button>
-
-							
-							<button class="btn btn-primary pull-right" v-on:click="onInstallCicked(processors.GOLDLEAF)" :disabled="!selected.length">
-								<span class="fa fa-upload"></span> Install with Goldleaf
-							</button>
+							<div class="pull-right">
+								<button class="btn btn-primary" v-on:click="onInstallCicked(processors.TINFOIL)" :disabled="!selected.length">
+									<span class="fa fa-upload"></span> Install with Tinfoil
+								</button>
+								
+								<button class="btn btn-primary" v-on:click="onInstallCicked(processors.GOLDLEAF)" :disabled="!selected.length">
+									<span class="fa fa-upload"></span> Install with Goldleaf
+								</button>
+							</div>
 						</div>
 
 						<div class="drive-wrapper drive-list-view">
@@ -127,14 +138,15 @@
 						</div>
 
 						<div class="actions clearfix">
-							<button class="btn btn-primary pull-right" v-on:click="onInstallCicked(processors.TINFOIL)" :disabled="!selected.length">
-								<span class="fa fa-upload"></span> Install with Tinfoil
-							</button>
-
-							
-							<button class="btn btn-primary pull-right" v-on:click="onInstallCicked(processors.GOLDLEAF)" :disabled="!selected.length">
-								<span class="fa fa-upload"></span> Install with Goldleaf
-							</button>
+							<div class="pull-right">
+								<button class="btn btn-primary" v-on:click="onInstallCicked(processors.TINFOIL)" :disabled="!selected.length">
+									<span class="fa fa-upload"></span> Install with Tinfoil
+								</button>
+								
+								<button class="btn btn-primary" v-on:click="onInstallCicked(processors.GOLDLEAF)" :disabled="!selected.length">
+									<span class="fa fa-upload"></span> Install with Goldleaf
+								</button>
+							</div>
 						</div>
 					</template>
 					<template v-else-if="installer.status === INSTALLING || installer.status === AWAITINGUSERINPUT || installer.status === FINISHED">
@@ -322,7 +334,7 @@
 				},
 
 				onInstallCicked(processor) {
-					axios.post(`installer/install/{processor}`, this.selected)
+					axios.post(`installer/install/${processor}`, this.selected)
 						.then((response) => {
 							if (response.data) {
 								this.setInstaller(response.data);

@@ -85,7 +85,7 @@ namespace GoldFlower.Controllers
 			App.Instance.SetFiles(files);
 			App.Instance.Install();
 
-			return new JsonResult(new { Status = App.Instance.InstallState, Progress = App.Instance.Progress, CurrentFile = App.Instance.CurrentFile, Files = App.Instance.Files, Events = App.Instance.Logger.MessageBag });
+			return new JsonResult(GetAppState());
 		}
 
 		[HttpPost]
@@ -94,7 +94,10 @@ namespace GoldFlower.Controllers
 		{
 			App.Instance.Abort();
 
-			return new JsonResult(new { Status = InstallState.Aborted, Progress = App.Instance.Progress, CurrentFile = App.Instance.CurrentFile, Files = App.Instance.Files, Events = App.Instance.Logger.MessageBag });
+            var state = GetAppState();
+            state.Status = InstallState.Aborted;
+
+			return new JsonResult(state);
 		}
 
 		[HttpPost]
@@ -103,14 +106,26 @@ namespace GoldFlower.Controllers
 		{
 			App.Instance.Complete();
 
-			return new JsonResult(new { Status = App.Instance.InstallState, Progress = App.Instance.Progress, CurrentFile = App.Instance.CurrentFile, Files = App.Instance.Files, Events = App.Instance.Logger.MessageBag });
+			return new JsonResult(GetAppState());
 		}
 
 		[HttpGet]
 		[Route("/installer/progress")]
 		public IActionResult Progress()
 		{
-			return new JsonResult(new { Status = App.Instance.InstallState, Progress = App.Instance.Progress, CurrentFile = App.Instance.CurrentFile, Files = App.Instance.Files, Events = App.Instance.Logger.MessageBag });
+			return new JsonResult(GetAppState());
+		}
+
+		private AppState GetAppState()
+		{
+			return new AppState()
+			{
+				Status = App.Instance.InstallState,
+				Progress = App.Instance.Progress,
+				CurrentFile = App.Instance.CurrentFile,
+				Files = App.Instance.Files,
+				Events = App.Instance.Logger.MessageBag
+			};
 		}
 
 		public IActionResult Error()

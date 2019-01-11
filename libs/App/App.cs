@@ -80,11 +80,11 @@ namespace GoldFlower
 
 		public void Complete()
 		{
+			Logger.MessageBag.Clear();
 			CurrentFile = null;
 			Files = null;
 			Progress = 0;
 			InstallState = InstallState.Idle;
-			Logger.MessageBag.Clear();
 		}
 
 		private void OnProgressChanged(ProgressChangedEventArgs e)
