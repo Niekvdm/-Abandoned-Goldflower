@@ -10,6 +10,7 @@ namespace GoldFlower
 	{
 		public InstallState Status { get; set; }
 		public int Progress { get; set; }
+		public ProcessorType ProcessorType { get; set; }
 		public List<FileContainer> Files { get; set; }
 		public FileContainer CurrentFile { get; set; }
 		public List<MessageItem> Events { get; set; }

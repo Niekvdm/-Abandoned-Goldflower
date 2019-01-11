@@ -19,318 +19,343 @@ using App.Data.Events;
 
 namespace Goldtree
 {
-    public class Goldtree : IManagerDelegates, IProcessor
-    {
-        private UsbK _usb = null;
+	public class Goldtree : IManagerDelegates, IProcessor
+	{
+		private UsbK _usb = null;
 
-        public event ProgressChanged OnProgressChanged;
-        public event FileChanged OnFileChanged;
-        public event FileStateChanged OnFileStateChanged;
-        public event InstallStateChanged OnInstallStateChanged;
-        public event MessageReceived OnMessageReceived;
+		public event ProgressChanged OnProgressChanged;
+		public event FileChanged OnFileChanged;
+		public event FileStateChanged OnFileStateChanged;
+		public event InstallStateChanged OnInstallStateChanged;
+		public event MessageReceived OnMessageReceived;
 
-        public bool IsRunning { get; set; } = true;
+		private bool _isRunning { get; set; } = true;
 
-        public void Install(List<FileContainer> files)
-        {
-            try
-            {
-                // Try to connect to the switch
-                //_usb = new UsbHandler(0x57E, 0x3000);
+		private bool Connect()
+		{
+			bool result = true;
 
-                var pat = new KLST_PATTERN_MATCH { DeviceID = @"USB\VID_057E&PID_3000" };
-                var lst = new LstK(0, ref pat);
-                lst.MoveNext(out var dinfo);
-                _usb = new UsbK(dinfo);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-                Console.WriteLine(ex.StackTrace);
+			try
+			{
+				NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Attempting to connect to the Switch"));
 
-                NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled, "No usb connection found. Are you sure the Switch is connected and that you have the correct USB drivers installed?"));
-                NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "No usb connection found. Are you sure the Switch is connected and that you have the correct USB drivers installed?"));
-                return;
-            }
+				// Try to connect to the switch
+				var pat = new KLST_PATTERN_MATCH { DeviceID = @"USB\VID_057E&PID_3000" };
+				var lst = new LstK(0, ref pat);
+				lst.MoveNext(out var dinfo);
+				_usb = new UsbK(dinfo);
 
-            try
-            {
-                foreach (var fileContainer in files)
-                {
-                    if (fileContainer.State == InstallState.Installing || fileContainer.State == InstallState.Failed || fileContainer.State == InstallState.Cancelled) continue;
+				NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Successfully connected to the Switch"));
+			}
+			catch (Exception ex)
+			{
+				result = false;
+				NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Failed to connect to the Switch"));
+				Console.WriteLine(ex.Message);
+				Console.WriteLine(ex.StackTrace);
+			}
 
-                    NotifyProgressChanged(new ProgressChangedEventArgs(0));
-                    NotifyFileChanged(new FileChangedEventArgs(fileContainer));
-                    NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.AwaitingUserInput, "Awaiting user input on the Switch"));
+			return result;
+		}
 
-                    NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Info, $"Processing {fileContainer.Name}"));
+		public void Install(List<FileContainer> files)
+		{
+			_isRunning = true;
 
-                    var connectionRequestCommand = new Command(CommandIds.ConnectionRequest);
-                    _usb.Write(connectionRequestCommand);
+			var isConnected = false;
 
-                    NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Info, "Attempting to connect to Goldleaf through USB..."));
+			while (_isRunning)
+			{
+				isConnected = Connect();
+				if (isConnected) break;
 
-                    var connectionResponseCommand = _usb.Read();
+				NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.AwaitingUserInput));
 
-                    if (connectionResponseCommand.MagicOk())
-                    {
-                        if (connectionResponseCommand.IsCommandId(CommandIds.ConnectionResponse))
-                        {
-                            NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Installing));
-                            NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Info, "Connection established with Goldleaf"));
+				Thread.Sleep(2500);
+			}
 
-                            var nspNameCommand = new Command(CommandIds.NSPName);
-                            _usb.Write(nspNameCommand);
-                            _usb.Write((uint)fileContainer.Name.Length);
-                            _usb.Write(fileContainer.Name);
+			if (!isConnected)
+			{
+				Disconnect();
+				return;
+			}
 
-                            NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Info, "NSP info was sent to Goldleaf. Waiting for approval..."));
+			try
+			{
+				foreach (var fileContainer in files)
+				{
+					if (fileContainer.State == InstallState.Installing || fileContainer.State == InstallState.Failed || fileContainer.State == InstallState.Cancelled) continue;
 
-                            var startCommand = _usb.Read();
+					NotifyProgressChanged(new ProgressChangedEventArgs(0));
+					NotifyFileChanged(new FileChangedEventArgs(fileContainer));
+					NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.AwaitingUserInput));
 
-                            if (startCommand.MagicOk())
-                            {
-                                if (startCommand.IsCommandId(CommandIds.Start))
-                                {
-                                    NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Info, "Goldleaf is ready for installation"));
+					NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Info, $"Processing {fileContainer.Name}"));
 
-                                    NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Installing));
+					var connectionRequestCommand = new Command(CommandIds.ConnectionRequest);
+					_usb.Write(connectionRequestCommand);
 
-                                    try
-                                    {
-                                        FileStream fs = new FileStream(fileContainer.FullName, FileMode.Open);
-                                        StreamStorage ist = new StreamStorage(fs, true);
-                                        Pfs pnsp = new Pfs(ist);
-                                        ist.Dispose();
-                                        fs.Close();
-                                        fs = new FileStream(fileContainer.FullName, FileMode.Open);
-                                        uint filecount = (uint)pnsp.Files.Length;
+					NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Info, "Attempting to connect to Goldleaf through USB..."));
 
-                                        var nspDataCommand = new Command(CommandIds.NSPData);
-                                        _usb.Write(nspDataCommand);
-                                        _usb.Write(filecount);
+					var connectionResponseCommand = _usb.Read();
 
-                                        int tikidx = -1;
-                                        int certidx = -1;
-                                        int tmpidx = 0;
+					if (connectionResponseCommand.MagicOk())
+					{
+						if (connectionResponseCommand.IsCommandId(CommandIds.ConnectionResponse))
+						{
+							NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Installing));
+							NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Info, "Connection established with Goldleaf"));
 
-                                        foreach (var file in pnsp.Files)
-                                        {
-                                            ulong offset = (ulong)pnsp.HeaderSize + (ulong)file.Offset;
-                                            ulong size = (ulong)file.Size;
-                                            uint len = (uint)file.Name.Length;
-                                            _usb.Write(len);
-                                            _usb.Write(file.Name);
-                                            _usb.Write(offset);
-                                            _usb.Write(size);
-                                            if (Path.GetExtension(file.Name).Replace(".", "").ToLower() == "tik") tikidx = tmpidx;
-                                            else if (Path.GetExtension(file.Name).Replace(".", "").ToLower() == "cert") certidx = tmpidx;
-                                            tmpidx++;
-                                        }
+							var nspNameCommand = new Command(CommandIds.NSPName);
+							_usb.Write(nspNameCommand);
+							_usb.Write((uint)fileContainer.Name.Length);
+							_usb.Write(fileContainer.Name);
 
-                                        using (var br = new BinaryReader(fs))
-                                        {
-                                            while (IsRunning)
-                                            {
-                                                var mainStreamCommand = _usb.Read();
+							NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Info, "NSP info was sent to Goldleaf. Waiting for approval..."));
 
-                                                if (mainStreamCommand.MagicOk())
-                                                {
-                                                    if (mainStreamCommand.IsCommandId(CommandIds.NSPContent))
-                                                    {
-                                                        _usb.Read(out uint idx);
+							var startCommand = _usb.Read();
 
-                                                        NotifyProgressChanged(new ProgressChangedEventArgs(0));
+							if (startCommand.MagicOk())
+							{
+								if (startCommand.IsCommandId(CommandIds.Start))
+								{
+									NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Info, "Goldleaf is ready for installation"));
+									NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Installing));
 
-                                                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, $"Sending content \"{pnsp.Files[idx].Name}\"... {(idx + 1)} / {pnsp.Files.Length}"));
+									try
+									{
+										FileStream fs = new FileStream(fileContainer.FullName, FileMode.Open);
+										StreamStorage ist = new StreamStorage(fs, true);
+										Pfs pnsp = new Pfs(ist);
+										ist.Dispose();
+										fs.Close();
+										fs = new FileStream(fileContainer.FullName, FileMode.Open);
+										uint filecount = (uint)pnsp.Files.Length;
 
-                                                        PfsFileEntry ent = pnsp.Files[idx];
-                                                        long rsize = 1048576;
-                                                        long coffset = pnsp.HeaderSize + ent.Offset;
-                                                        long toread = ent.Size;
-                                                        long tmpread = 1;
-                                                        long bytesSent = 0;
-                                                        byte[] bufb;
+										var nspDataCommand = new Command(CommandIds.NSPData);
+										_usb.Write(nspDataCommand);
+										_usb.Write(filecount);
 
-                                                        while ((tmpread > 0) && (toread > 0) && (coffset < (coffset + ent.Size)))
-                                                        {
-                                                            NotifyProgressChanged(new ProgressChangedEventArgs((int)(bytesSent * 100 / ent.Size)));
-                                                            if (rsize >= ent.Size) rsize = ent.Size;
-                                                            int tor = (int)Math.Min(rsize, toread);
-                                                            bufb = new byte[tor];
-                                                            br.BaseStream.Position = coffset;
-                                                            tmpread = br.Read(bufb, 0, bufb.Length);
+										int tikidx = -1;
+										int certidx = -1;
+										int tmpidx = 0;
 
-                                                            _usb.Write(bufb);
+										foreach (var file in pnsp.Files)
+										{
+											ulong offset = (ulong)pnsp.HeaderSize + (ulong)file.Offset;
+											ulong size = (ulong)file.Size;
+											uint len = (uint)file.Name.Length;
+											_usb.Write(len);
+											_usb.Write(file.Name);
+											_usb.Write(offset);
+											_usb.Write(size);
+											if (Path.GetExtension(file.Name).Replace(".", "").ToLower() == "tik") tikidx = tmpidx;
+											else if (Path.GetExtension(file.Name).Replace(".", "").ToLower() == "cert") certidx = tmpidx;
+											tmpidx++;
+										}
 
-                                                            bytesSent += tmpread;
-                                                            coffset += tmpread;
-                                                            toread -= tmpread;
-                                                        }
+										using (var br = new BinaryReader(fs))
+										{
+											while (_isRunning)
+											{
+												var mainStreamCommand = _usb.Read();
 
-                                                        NotifyProgressChanged(new ProgressChangedEventArgs(100));
+												if (mainStreamCommand.MagicOk())
+												{
+													if (mainStreamCommand.IsCommandId(CommandIds.NSPContent))
+													{
+														_usb.Read(out uint idx);
 
-                                                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Content was sent to Goldleaf"));
-                                                    }
-                                                    else if (mainStreamCommand.IsCommandId(CommandIds.NSPTicket))
-                                                    {
-                                                        NotifyProgressChanged(new ProgressChangedEventArgs(0));
-                                                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Sending ticket file..."));
+														NotifyProgressChanged(new ProgressChangedEventArgs(0));
 
-                                                        PfsFileEntry tik = pnsp.Files[tikidx];
-                                                        br.BaseStream.Seek(pnsp.HeaderSize + tik.Offset, SeekOrigin.Begin);
-                                                        byte[] file = br.ReadBytes((int)tik.Size);
-                                                        _usb.Write(file);
+														NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, $"Sending content \"{pnsp.Files[idx].Name}\"... {(idx + 1)} / {pnsp.Files.Length}"));
 
-                                                        NotifyProgressChanged(new ProgressChangedEventArgs(100));
-                                                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Ticket was sent to Goldleaf."));
-                                                    }
-                                                    else if (mainStreamCommand.IsCommandId(CommandIds.NSPCert))
-                                                    {
-                                                        NotifyProgressChanged(new ProgressChangedEventArgs(0));
-                                                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Sending certificate file..."));
+														PfsFileEntry ent = pnsp.Files[idx];
+														long rsize = 1048576;
+														long coffset = pnsp.HeaderSize + ent.Offset;
+														long toread = ent.Size;
+														long tmpread = 1;
+														long bytesSent = 0;
+														byte[] bufb;
 
-                                                        PfsFileEntry cert = pnsp.Files[certidx];
-                                                        br.BaseStream.Seek(pnsp.HeaderSize + cert.Offset, SeekOrigin.Begin);
-                                                        byte[] file = br.ReadBytes((int)cert.Size);
-                                                        _usb.Write(file);
-                                                        NotifyProgressChanged(new ProgressChangedEventArgs(100));
-                                                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Certificate was sent to Goldleaf."));
-                                                    }
-                                                    else if (mainStreamCommand.IsCommandId(CommandIds.Finish))
-                                                    {
-                                                        NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Finished));
-                                                        break;
-                                                    }
-                                                    else
-                                                    {
-                                                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Invalid command received. Are you sure Goldleaf is active?"));
-                                                        NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Failed));
-                                                        NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Failed));
-                                                        break;
-                                                    }
-                                                }
-                                                else
-                                                {
-                                                    NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Invalid command received. Are you sure Goldleaf is active?"));
-                                                    NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled));
-                                                    NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Failed));
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "An error occured opening the select NSP. Are you sure it's a valid NSP?"));
-                                        Console.WriteLine(ex.Message);
-                                        Console.WriteLine(ex.StackTrace);
-                                        NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Failed));
-                                    }
-                                }
-                                else if (startCommand.IsCommandId(CommandIds.Finish))
-                                {
-                                    NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Goldleaf has cancelled the installation"));
-                                    NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Cancelled));
-                                }
-                                else
-                                {
-                                    NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Invalid command received. Are you sure Goldleaf is active?"));
-                                    NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Failed));
-                                    NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled));
-                                }
-                            }
-                            else
-                            {
-                                NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Invalid command received. Are you sure Goldleaf is active?"));
-                                NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Failed));
-                                NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled));
-                            }
-                        }
-                        else if (connectionResponseCommand.IsCommandId(CommandIds.Finish))
-                        {
-                            NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Goldleaf has cancelled the installation"));
-                        }
-                        else
-                        {
-                            NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Invalid command received. Are you sure Goldleaf is active?"));
-                            NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled));
-                        }
-                    }
-                    else
-                    {
-                        NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Invalid command received. Are you sure Goldleaf is active?"));
-                        NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled));
-                    }
-                }
-                // }
-                // else
-                // {
-                //     AddWarning("Unable to connect to Goldleaf. Are you sure Goldleaf is active and you have the correct USB drivers installed?");
-                //     Manager.InstallState = InstallState.Cancelled;
-                // }
-            }
-            catch (Exception ex)
-            {
-                NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled));
-                Console.WriteLine(ex.Message);
-                Console.WriteLine(ex.StackTrace);
-            }
+														while ((tmpread > 0) && (toread > 0) && (coffset < (coffset + ent.Size)))
+														{
+															NotifyProgressChanged(new ProgressChangedEventArgs((int)(bytesSent * 100 / ent.Size)));
+															if (rsize >= ent.Size) rsize = ent.Size;
+															int tor = (int)Math.Min(rsize, toread);
+															bufb = new byte[tor];
+															br.BaseStream.Position = coffset;
+															tmpread = br.Read(bufb, 0, bufb.Length);
+
+															_usb.Write(bufb);
+
+															bytesSent += tmpread;
+															coffset += tmpread;
+															toread -= tmpread;
+														}
+
+														NotifyProgressChanged(new ProgressChangedEventArgs(100));
+
+														NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Content was sent to Goldleaf"));
+													}
+													else if (mainStreamCommand.IsCommandId(CommandIds.NSPTicket))
+													{
+														NotifyProgressChanged(new ProgressChangedEventArgs(0));
+														NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Sending ticket file..."));
+
+														PfsFileEntry tik = pnsp.Files[tikidx];
+														br.BaseStream.Seek(pnsp.HeaderSize + tik.Offset, SeekOrigin.Begin);
+														byte[] file = br.ReadBytes((int)tik.Size);
+														_usb.Write(file);
+
+														NotifyProgressChanged(new ProgressChangedEventArgs(100));
+														NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Ticket was sent to Goldleaf."));
+													}
+													else if (mainStreamCommand.IsCommandId(CommandIds.NSPCert))
+													{
+														NotifyProgressChanged(new ProgressChangedEventArgs(0));
+														NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Sending certificate file..."));
+
+														PfsFileEntry cert = pnsp.Files[certidx];
+														br.BaseStream.Seek(pnsp.HeaderSize + cert.Offset, SeekOrigin.Begin);
+														byte[] file = br.ReadBytes((int)cert.Size);
+														_usb.Write(file);
+														NotifyProgressChanged(new ProgressChangedEventArgs(100));
+														NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Certificate was sent to Goldleaf."));
+													}
+													else if (mainStreamCommand.IsCommandId(CommandIds.Finish))
+													{
+														NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Finished));
+														break;
+													}
+													else
+													{
+														NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Failed, "Invalid command received. Are you sure Goldleaf is active?"));
+														NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Failed));
+														break;
+													}
+												}
+												else
+												{
+													NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled, "Invalid command received. Are you sure Goldleaf is active?"));
+													NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Failed));
+													break;
+												}
+											}
+										}
+									}
+									catch (Exception ex)
+									{
+										Console.WriteLine(ex.Message);
+										Console.WriteLine(ex.StackTrace);
+										NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "An error occured opening the select NSP. Are you sure it's a valid NSP?"));
+										NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Failed));
+									}
+								}
+								else if (startCommand.IsCommandId(CommandIds.Finish))
+								{
+									NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Goldleaf has cancelled the installation"));
+									NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Cancelled));
+								}
+								else
+								{
+									NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Failed));
+									NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled, "Invalid command received. Are you sure Goldleaf is active?"));
+								}
+							}
+							else
+							{
+								NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Failed));
+								NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled, "Invalid command received. Are you sure Goldleaf is active?"));
+							}
+						}
+						else if (connectionResponseCommand.IsCommandId(CommandIds.Finish))
+						{
+							NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Goldleaf has cancelled the installation"));
+						}
+						else
+						{
+							NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled, "Invalid command received. Are you sure Goldleaf is active?"));
+						}
+					}
+					else
+					{
+						NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled, "Invalid command received. Are you sure Goldleaf is active?"));
+					}
+				}
+				// }
+				// else
+				// {
+				//     AddWarning("Unable to connect to Goldleaf. Are you sure Goldleaf is active and you have the correct USB drivers installed?");
+				//     Manager.InstallState = InstallState.Cancelled;
+				// }
+			}
+			catch (Exception ex)
+			{
+				NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, ex.Message));
+				NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled, "Invalid command received. Are you sure Goldleaf is active?"));
+				Console.WriteLine(ex.Message);
+				Console.WriteLine(ex.StackTrace);
+			}
 
 
-            NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Finished));
+			NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Finished));
 
-            Close();
-        }
+			Disconnect();
+		}
 
-        public void Abort()
-        {
-            NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Aborted));
-            Close();
-        }
+		public void Abort()
+		{
+			NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Aborted));
+			Disconnect();
+		}
 
-        private void Close()
-        {
-            if (_usb != null)
-            {
-                var finishCommand = new Command(CommandIds.Finish);
+		private void Disconnect()
+		{
+			NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Disconnecting..."));
 
-                try
-                {
-                    _usb.Write(finishCommand);
-                }
-                catch { }
-            }
-        }
+			_isRunning = false;
 
-        public void NotifyProgressChanged(ProgressChangedEventArgs e)
-        {
-            OnProgressChanged?.Invoke(e);
-        }
+			if (_usb != null)
+			{
+				var finishCommand = new Command(CommandIds.Finish);
 
-        public void NotifyFileChanged(FileChangedEventArgs e)
-        {
-            OnFileChanged?.Invoke(e);
-        }
+				try
+				{
+					_usb.Write(finishCommand);
+				}
+				catch { }
+			}
+		}
 
-        public void NotifyFileStateChanged(FileStateChangedEventArgs e)
-        {
-            OnFileStateChanged?.Invoke(e);
-        }
+		public void NotifyProgressChanged(ProgressChangedEventArgs e)
+		{
+			OnProgressChanged?.Invoke(e);
+		}
 
-        public void NotifyInstallStateChanged(InstallStateChangedEventArgs e)
-        {
-            if (e.State == InstallState.Cancelled || e.State == InstallState.Aborted || e.State == InstallState.Failed)
-            {
-                IsRunning = false;
-            }
+		public void NotifyFileChanged(FileChangedEventArgs e)
+		{
+			OnFileChanged?.Invoke(e);
+		}
 
-            OnInstallStateChanged?.Invoke(e);
-        }
+		public void NotifyFileStateChanged(FileStateChangedEventArgs e)
+		{
+			OnFileStateChanged?.Invoke(e);
+		}
 
-        public void NotifiyMessageReceived(MessageReceivedEventArgs e)
-        {
-            OnMessageReceived?.Invoke(e);
-        }
-    }
+		public void NotifyInstallStateChanged(InstallStateChangedEventArgs e)
+		{
+			if (e.State == InstallState.Cancelled || e.State == InstallState.Aborted || e.State == InstallState.Failed)
+			{
+				_isRunning = false;
+			}
+
+			OnInstallStateChanged?.Invoke(e);
+		}
+
+		public void NotifiyMessageReceived(MessageReceivedEventArgs e)
+		{
+			OnMessageReceived?.Invoke(e);
+		}
+	}
 }

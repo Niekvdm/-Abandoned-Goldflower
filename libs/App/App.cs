@@ -29,21 +29,34 @@ namespace GoldFlower
 		}
 
 		public Logger.Logger Logger { get; set; }
-		private IProcessor _processor = null;
 
-		public List<FileContainer> Files = null;
-		public InstallState InstallState { get; set; } = InstallState.Idle;
-		public FileContainer CurrentFile { get; set; }
-		public int Progress { get; set; }
+		private List<FileContainer> _files = null;
+		private InstallState _installState { get; set; } = InstallState.Idle;
+		private FileContainer _currentFile { get; set; }
+		private int _progress { get; set; }
+		private ProcessorType _processorType { get; set; }
+		private IProcessor _processor = null;
 
 		public App()
 		{
 			Logger = new Logger.Logger();
 		}
 
-		public void SetProcessor(IProcessor processor)
+		public void SetProcessorByType(ProcessorType type)
 		{
-			_processor = processor;
+			_processorType = type;
+
+			switch (type)
+			{
+				case ProcessorType.Tinfoil:
+					_processor = new Tinfoil.Tinfoil();
+					break;
+					
+				case ProcessorType.Goldleaf:
+					_processor = new Goldtree.Goldtree();
+					break;
+			}
+
 			_processor.OnProgressChanged += this.OnProgressChanged;
 			_processor.OnFileChanged += this.OnFileChanged;
 			_processor.OnFileStateChanged += this.OnFileStateChanged;
@@ -51,20 +64,25 @@ namespace GoldFlower
 			_processor.OnMessageReceived += this.OnMessageReceived;
 		}
 
+		public void SetLogLevel(int logLevel)
+		{
+			Logger.SetLogLevel(logLevel);
+		}
+
 		public void SetFiles(List<FileContainer> files)
 		{
-			Files = files;
+			_files = files;
 		}
 
 		public void Install()
 		{
 			Logger.MessageBag.Clear();
-			InstallState = InstallState.Installing;
-			CurrentFile = Files.FirstOrDefault(x => x.State.Equals(InstallState.Idle));
+			_installState = InstallState.Installing;
+			_currentFile = _files.FirstOrDefault(x => x.State.Equals(InstallState.Idle));
 
 			new Thread(() =>
 			{
-				_processor?.Install(Files);
+				_processor?.Install(_files);
 			}).Start();
 		}
 
@@ -72,49 +90,50 @@ namespace GoldFlower
 		{
 			_processor?.Abort();
 
-			InstallState = InstallState.Idle;
-			Files = null;
-			CurrentFile = null;
-			Progress = 0;
+			_installState = InstallState.Idle;
+			_files = null;
+			_currentFile = null;
+			_progress = 0;
 		}
 
 		public void Complete()
 		{
 			Logger.MessageBag.Clear();
-			CurrentFile = null;
-			Files = null;
-			Progress = 0;
-			InstallState = InstallState.Idle;
+			_currentFile = null;
+			_files = null;
+			_progress = 0;
+			_installState = InstallState.Idle;
 		}
 
 		public AppState GetAppState()
 		{
 			return new AppState()
 			{
-				Status = App.Instance.InstallState,
-				Progress = App.Instance.Progress,
-				CurrentFile = App.Instance.CurrentFile,
-				Files = App.Instance.Files,
-				Events = App.Instance.Logger.MessageBag
+				Status = _installState,
+				Progress = _progress,
+				ProcessorType = _processorType,
+				CurrentFile = _currentFile,
+				Files = _files,
+				Events = Logger.MessageBag
 			};
 		}
 
 		private void OnProgressChanged(ProgressChangedEventArgs e)
 		{
-			Progress = e.Percentage;
+			_progress = e.Percentage;
 		}
 
 		private void OnFileChanged(FileChangedEventArgs e)
 		{
-			if (CurrentFile != e.File)
+			if (_currentFile != e.File)
 			{
-				CurrentFile = e.File;
+				_currentFile = e.File;
 			}
 		}
 
 		private void OnFileStateChanged(FileStateChangedEventArgs e)
 		{
-			var file = Files.FirstOrDefault(x => x.Name == CurrentFile.Name);
+			var file = _files.FirstOrDefault(x => x.Name == _currentFile.Name);
 
 			if (file != null)
 			{
@@ -124,8 +143,13 @@ namespace GoldFlower
 
 		private void OnInstallStateChanged(InstallStateChangedEventArgs e)
 		{
-			if (InstallState == InstallState.Cancelled && e.State == InstallState.Finished) return;
-			InstallState = e.State;
+			if (_installState == InstallState.Cancelled && e.State == InstallState.Finished) return;
+			_installState = e.State;
+
+			if (!string.IsNullOrEmpty(e.Message))
+			{
+				Logger.AddMessage(MessageType.Error, e.Message);
+			}
 		}
 
 		private void OnMessageReceived(MessageReceivedEventArgs e)

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using App.Data.Enums;
 using App.Data.Events;
 using App.Data.Interfaces;
@@ -30,6 +31,8 @@ namespace Tinfoil
 
 		private List<FileContainer> _files = null;
 
+		private InstallState _state = InstallState.Idle;
+
 
 		public void Abort()
 		{
@@ -43,10 +46,24 @@ namespace Tinfoil
 			_files = files;
 			_isRunning = true;
 
-			if (!Connect()) return;
-			SendNSPList();
-			PollCommands();
-			Disconnect();
+			var isConnected = false;
+
+			while (_isRunning)
+			{
+				isConnected = Connect();
+				if (isConnected) break;
+
+				NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.AwaitingUserInput));
+
+				Thread.Sleep(2500);
+			}
+
+			if (isConnected)
+			{
+				SendNSPList();
+				PollCommands();
+				Disconnect();
+			}
 		}
 
 		private bool Connect()
@@ -68,8 +85,7 @@ namespace Tinfoil
 			catch (Exception ex)
 			{
 				result = false;
-				NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled, "No usb connection found. Are you sure the Switch is connected and that you have the correct USB drivers installed?"));
-				NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "No usb connection found. Are you sure the Switch is connected and that you have the correct USB drivers installed?"));
+				NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, "Failed to connect to the Switch"));
 				Console.WriteLine(ex.Message);
 				Console.WriteLine(ex.StackTrace);
 			}
@@ -80,6 +96,11 @@ namespace Tinfoil
 		private void Disconnect()
 		{
 			NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Disconnecting..."));
+
+			if (_state.Equals(InstallState.AwaitingUserInput))
+			{
+				NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled, "Install process abruptly ended"));
+			}
 
 			_isRunning = false;
 
@@ -137,7 +158,7 @@ namespace Tinfoil
 
 				if (BitConverter.ToUInt32(command, 0) == CommandExit)
 				{
-					NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Finished, "Finished command received"));
+					NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Finished));
 					break;
 				}
 				else if (BitConverter.ToUInt32(command, 0) == 1)
@@ -189,8 +210,8 @@ namespace Tinfoil
 
 			if (file == null)
 			{
-				// File does not exist or nsp name is malformed?!
 				NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled, "File does not exists or it's name is malformed"));
+				NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, $"Name received from Tinfoil: {name}"));
 				return;
 			}
 
@@ -236,8 +257,6 @@ namespace Tinfoil
 				}
 
 				NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Finished));
-
-
 				NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "NSP content received by the Switch"));
 			}
 			catch (Exception ex)
@@ -245,8 +264,6 @@ namespace Tinfoil
 				// Oops, we got an exception along the way
 				NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Failed));
 				NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled, ex.Message));
-				NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Error, ex.Message));
-
 				NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Failed to send NSP content to the Switch"));
 			}
 		}
@@ -268,6 +285,8 @@ namespace Tinfoil
 
 		public void NotifyInstallStateChanged(InstallStateChangedEventArgs e)
 		{
+			_state = e.State;
+
 			if (e.State == InstallState.Cancelled || e.State == InstallState.Aborted || e.State == InstallState.Failed)
 			{
 				_isRunning = false;

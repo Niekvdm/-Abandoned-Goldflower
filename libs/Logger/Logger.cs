@@ -14,35 +14,59 @@ namespace Logger
 
 	public class Logger
 	{
+		private int _logLevel = 3;
 		public List<MessageItem> MessageBag { get; set; }
 
-		public Logger()
+		public Logger(int logLevel = 3)
 		{
+			_logLevel = logLevel;
 			MessageBag = new List<MessageItem>();
 		}
 
+		public void SetLogLevel(int logLevel)
+		{
+			_logLevel = logLevel;
+		}
+		
 		public void AddError(string message)
 		{
-			AddMessage(MessageType.Error, message);
+			if (_logLevel >= 0)
+			{
+				AddMessage(MessageType.Error, message);
+			}
 		}
 
 		public void AddWarning(string message)
 		{
-			AddMessage(MessageType.Warning, message);
-		}
-
-		public void AddInfo(string message)
-		{
-			AddMessage(MessageType.Info, message);
+			if (_logLevel >= 1)
+			{
+				AddMessage(MessageType.Warning, message);
+			}
 		}
 
 		public void AddSuccess(string message)
 		{
-			AddMessage(MessageType.Success, message);
+			if (_logLevel >= 2)
+			{
+				AddMessage(MessageType.Success, message);
+			}
+		}
+
+		public void AddInfo(string message)
+		{
+			if (_logLevel >= 3)
+			{
+				AddMessage(MessageType.Info, message);
+			}
 		}
 
 		public void AddMessage(MessageType type, string message)
 		{
+			if (MessageBag.Count > 50)
+			{
+				MessageBag.RemoveAt(0);
+			}
+
 			MessageBag.Add(new MessageItem()
 			{
 				Type = type,
