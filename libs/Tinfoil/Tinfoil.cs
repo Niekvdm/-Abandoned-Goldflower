@@ -206,7 +206,7 @@ namespace Tinfoil
 
 			SendResponseHeader(CommandRequestNSP, requestedLength);
 
-			var file = _files.FirstOrDefault(x => x.Name.ToLower().Equals(name));
+			var file = _files.FirstOrDefault(x => x.Name.ToLower().Equals(name.ToLower()));
 
 			if (file == null)
 			{
@@ -230,6 +230,8 @@ namespace Tinfoil
 						long bytesSent = 0;
 						long totalBytes = new FileInfo(file.FullName).Length;
 
+						binaryReader.BaseStream.Seek(offset, SeekOrigin.Begin);
+
 						NotifyProgressChanged(new ProgressChangedEventArgs(0));
 
 						while (currentOffset < requestedLength)
@@ -239,7 +241,7 @@ namespace Tinfoil
 								readLength = requestedLength - currentOffset;
 							}
 
-							binaryReader.BaseStream.Position = (long)currentOffset;
+							//binaryReader.BaseStream.Position = (long)currentOffset;
 
 							var readBuffer = new byte[readLength];
 							var bytesRead = binaryReader.Read(readBuffer, 0, (int)readLength);
@@ -256,7 +258,7 @@ namespace Tinfoil
 					}
 				}
 
-				NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Finished));
+				//NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Finished));
 				NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "NSP content received by the Switch"));
 			}
 			catch (Exception ex)
