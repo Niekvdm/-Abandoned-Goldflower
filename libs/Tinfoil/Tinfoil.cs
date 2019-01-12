@@ -33,6 +33,9 @@ namespace Tinfoil
 
 		private InstallState _state = InstallState.Idle;
 
+		private FileContainer _currentFile = null;
+		private int _currentProgress = 0;
+
 
 		public void Abort()
 		{
@@ -215,24 +218,34 @@ namespace Tinfoil
 				return;
 			}
 
-			try
+			if (_currentFile != file)
 			{
+				if(file != null) {
+					NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Finished));
+				}
+
+				_currentFile = file;
+				_currentProgress = 0;
+				NotifyProgressChanged(new ProgressChangedEventArgs(_currentProgress));
 				NotifyFileChanged(new FileChangedEventArgs(file));
 				NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Installing));
+			}
 
+			try
+			{
 				// Send NSP content
 				using (var fileStream = new FileStream(file.FullName, FileMode.Open))
 				{
 					using (var binaryReader = new BinaryReader(fileStream))
 					{
-						ulong currentOffset = 0;
+						ulong currentOffset = (ulong)offset;
 						ulong readLength = 1048576;
 						long bytesSent = 0;
 						long totalBytes = new FileInfo(file.FullName).Length;
 
 						binaryReader.BaseStream.Seek(offset, SeekOrigin.Begin);
 
-						NotifyProgressChanged(new ProgressChangedEventArgs(0));
+						int tmpProgress = 0;
 
 						while (currentOffset < requestedLength)
 						{
@@ -241,25 +254,34 @@ namespace Tinfoil
 								readLength = requestedLength - currentOffset;
 							}
 
-							//binaryReader.BaseStream.Position = (long)currentOffset;
+							binaryReader.BaseStream.Position = (long)currentOffset;
 
 							var readBuffer = new byte[readLength];
 							var bytesRead = binaryReader.Read(readBuffer, 0, (int)readLength);
 
 							_usb.Write(readBuffer);
 
-							currentOffset += readLength;
+							currentOffset += (ulong)bytesRead;
 							bytesSent += bytesRead;
+							tmpProgress = (int)(bytesSent * 100 / totalBytes);
 
-							NotifyProgressChanged(new ProgressChangedEventArgs((int)(bytesSent * 100 / totalBytes)));
+							NotifyProgressChanged(new ProgressChangedEventArgs(tmpProgress));
 						}
 
-						NotifyProgressChanged(new ProgressChangedEventArgs(100));
+						_currentProgress += tmpProgress;
+
+						if (_currentProgress > 100)
+						{
+							_currentProgress = 100;
+							NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Finished));
+						}
+
+						NotifyProgressChanged(new ProgressChangedEventArgs(_currentProgress));
 					}
 				}
 
 				//NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Finished));
-				NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "NSP content received by the Switch"));
+				//NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "NSP content received by the Switch"));
 			}
 			catch (Exception ex)
 			{
