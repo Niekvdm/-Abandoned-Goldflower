@@ -9,6 +9,7 @@ using App.Data.Events;
 using App.Data.Interfaces;
 using App.Data.Models;
 using LibUsb.Windows;
+using Tinfoil.Commands.Enums;
 using Tinfoil.Extensions;
 
 namespace Tinfoil
@@ -22,10 +23,6 @@ namespace Tinfoil
 		public event InstallStateChanged OnInstallStateChanged;
 		public event MessageReceived OnMessageReceived;
 
-		private byte CommandTypeResponse = 1;
-		private ulong CommandExit = 0;
-		private uint CommandRequestNSP = 1;
-
 		private UsbK _usb = null;
 		private bool _isRunning = false;
 
@@ -34,7 +31,11 @@ namespace Tinfoil
 		private InstallState _state = InstallState.Idle;
 
 		private FileContainer _currentFile = null;
-		private int _currentProgress = 0;
+		private float _currentProgress = 0;
+
+
+		private ulong BUFFER_DATA_LENGTH = 0x100000;
+		private ulong PADDING_LENGTH = 0x1000;
 
 
 		public void Abort()
@@ -151,33 +152,44 @@ namespace Tinfoil
 			{
 				var buffer = _usb.Read(32);
 
-				var magic = new byte[4];
-				Array.Copy(buffer, magic, 4);
+				var magic = Encoding.UTF8.GetString(GetBytesFromBuffer(buffer, 0, 4));
 
-				if (Encoding.UTF8.GetString(magic) != "TUC0") continue;
+				if (magic != "TUC0") continue;
 
-				var command = new byte[4];
-				Array.Copy(buffer, 8, command, 0, 4);
+				var command = BitConverter.ToUInt32(GetBytesFromBuffer(buffer, 8, 12), 0);
 
-				if (BitConverter.ToUInt32(command, 0) == CommandExit)
+				if (command == CommandIds.Exit)
 				{
+					NotifyProgressChanged(new ProgressChangedEventArgs(100));
+					NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Finished));
+					NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Success, $"Fininshed installing {_currentFile.Name}"));
 					NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Finished));
 					break;
 				}
-				else if (BitConverter.ToUInt32(command, 0) == 1)
+				else if (command == CommandIds.Nsp || command == CommandIds.NspPadding)
 				{
+					NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, $"Command: {command}"));
+
 					NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Installing));
-					SendNSPContent();
+					SendNSPContent(command, command == CommandIds.NspPadding ? true : false);
 				}
 			}
+		}
+
+		private byte[] GetBytesFromBuffer(byte[] buffer, int startIndex, int endIndex)
+		{
+			int length = Math.Abs(startIndex - endIndex);
+			byte[] result = new byte[length];
+			Array.Copy(buffer, startIndex, result, 0, length);
+			return result;
 		}
 
 		private void SendResponseHeader(uint command, ulong length)
 		{
 			NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Sending response header to the Switch"));
 
-			_usb.Write(Encoding.UTF8.GetBytes("TUC0"));
-			_usb.Write(new byte[] { CommandTypeResponse, 0, 0, 0 });
+			_usb.Write("TUC0");
+			_usb.Write(new byte[] { CommandIds.TypeResponse, 0x00, 0x00, 0x00 });
 			_usb.Write(command);
 			_usb.Write(length);
 			_usb.Write(new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 });
@@ -185,50 +197,47 @@ namespace Tinfoil
 			NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Response header received by the Switch"));
 		}
 
-		private void SendNSPContent()
+		private void SendNSPContent(uint command, bool padding = false)
 		{
-			NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Sending NSP content to the Switch"));
+			NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "Sending NSP part to the Switch"));
 
-			var buffer = _usb.Read(32);
+			byte[] buffer = _usb.Read(32);
 
-			var requestedLengthBytes = new byte[8];
-			Array.Copy(buffer, 0, requestedLengthBytes, 0, 8);
-			var requestedLength = BitConverter.ToUInt64(requestedLengthBytes, 0);
-
-			var offsetBytes = new byte[8];
-			Array.Copy(buffer, 8, offsetBytes, 0, 8);
-			var offset = (long)BitConverter.ToUInt64(offsetBytes, 0);
-
-			var nameLengthBytes = new byte[8];
-			Array.Copy(buffer, 16, nameLengthBytes, 0, 8);
-			var nameLength = BitConverter.ToUInt64(nameLengthBytes, 0);
+			ulong requestedPartLength = BitConverter.ToUInt64(GetBytesFromBuffer(buffer, 0, 8), 0);
+			long requestedPartOffset = (long)BitConverter.ToUInt64(GetBytesFromBuffer(buffer, 8, 16), 0);
+			ulong nspNameLength = BitConverter.ToUInt64(GetBytesFromBuffer(buffer, 16, 24), 0);
 
 			// Read NSP file name
-			var nameBytes = _usb.Read((int)nameLength);
-			var name = Encoding.UTF8.GetString(nameBytes);
+			buffer = _usb.Read((int)nspNameLength);
+			string nspName = Encoding.UTF8.GetString(buffer);
 
-			SendResponseHeader(CommandRequestNSP, requestedLength);
+			NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, $"Part size: {requestedPartLength}, Part offset: {requestedPartOffset}, Name length: {nspNameLength}, Name: {nspName}"));
 
-			var file = _files.FirstOrDefault(x => x.Name.ToLower().Equals(name.ToLower()));
+			SendResponseHeader(command, requestedPartLength);
+
+			var file = _files.FirstOrDefault(x => x.Name.ToLower().Equals(nspName.ToLower()));
 
 			if (file == null)
 			{
 				NotifyInstallStateChanged(new InstallStateChangedEventArgs(InstallState.Cancelled, "File does not exists or it's name is malformed"));
-				NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, $"Name received from Tinfoil: {name}"));
+				NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, $"Name received from Tinfoil: {nspName}"));
 				return;
 			}
 
 			if (_currentFile != file)
 			{
-				if(file != null) {
+				if (_currentFile != null)
+				{
 					NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Finished));
+					NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Success, $"Fininshed installing {_currentFile.Name}"));
 				}
 
 				_currentFile = file;
 				_currentProgress = 0;
-				NotifyProgressChanged(new ProgressChangedEventArgs(_currentProgress));
+				NotifyProgressChanged(new ProgressChangedEventArgs((int)_currentProgress));
 				NotifyFileChanged(new FileChangedEventArgs(file));
 				NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Installing));
+				NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Info, $"Installing: {_currentFile.Name}"));
 			}
 
 			try
@@ -238,34 +247,54 @@ namespace Tinfoil
 				{
 					using (var binaryReader = new BinaryReader(fileStream))
 					{
-						ulong currentOffset = (ulong)offset;
-						ulong readLength = 1048576;
+						ulong currentOffset = 0;
+						ulong endOffset = requestedPartLength;
+						ulong readLength = BUFFER_DATA_LENGTH;
+
+						if (padding)
+						{
+							readLength -= PADDING_LENGTH;
+						}
+
 						long bytesSent = 0;
 						long totalBytes = new FileInfo(file.FullName).Length;
 
-						binaryReader.BaseStream.Seek(offset, SeekOrigin.Begin);
+						binaryReader.BaseStream.Seek(requestedPartOffset, SeekOrigin.Begin);
 
-						int tmpProgress = 0;
+						float tmpProgress = 0;
+						byte[] readBuffer;
 
-						while (currentOffset < requestedLength)
+						while (currentOffset < endOffset)
 						{
-							if (currentOffset + readLength >= requestedLength)
+							if (currentOffset + readLength >= endOffset)
 							{
-								readLength = requestedLength - currentOffset;
+								readLength = endOffset - currentOffset;
 							}
 
-							binaryReader.BaseStream.Position = (long)currentOffset;
-
-							var readBuffer = new byte[readLength];
+							readBuffer = new byte[readLength];
 							var bytesRead = binaryReader.Read(readBuffer, 0, (int)readLength);
+
+							if (padding)
+							{
+								byte[] paddedBuffer = new byte[(int)PADDING_LENGTH + readBuffer.Length];
+
+								for (var i = 0; i < (int)PADDING_LENGTH; i++)
+								{
+									paddedBuffer[i] = 0x00;
+								}
+
+								Array.Copy(readBuffer, 0, paddedBuffer, (int)PADDING_LENGTH, readBuffer.Length);
+
+								readBuffer = paddedBuffer;
+							}
 
 							_usb.Write(readBuffer);
 
-							currentOffset += (ulong)bytesRead;
-							bytesSent += bytesRead;
-							tmpProgress = (int)(bytesSent * 100 / totalBytes);
+							currentOffset += readLength;
+							bytesSent += (long)readLength;
+							tmpProgress = bytesSent * 100 / totalBytes;
 
-							NotifyProgressChanged(new ProgressChangedEventArgs(tmpProgress));
+							NotifyProgressChanged(new ProgressChangedEventArgs((int)tmpProgress));
 						}
 
 						_currentProgress += tmpProgress;
@@ -276,12 +305,12 @@ namespace Tinfoil
 							NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Finished));
 						}
 
-						NotifyProgressChanged(new ProgressChangedEventArgs(_currentProgress));
+						NotifyProgressChanged(new ProgressChangedEventArgs((int)_currentProgress));
 					}
 				}
 
 				//NotifyFileStateChanged(new FileStateChangedEventArgs(InstallState.Finished));
-				//NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "NSP content received by the Switch"));
+				NotifiyMessageReceived(new MessageReceivedEventArgs(MessageType.Debug, "NSP part received by the Switch"));
 			}
 			catch (Exception ex)
 			{

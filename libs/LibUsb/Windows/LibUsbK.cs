@@ -276,6 +276,6 @@ namespace LibUsb.Windows
             driverAPI.SetAltInterface(mHandleStruct, NumberOrIndex, IsIndex, AltSettingNumber);
 
         public virtual bool WritePipe(byte PipeID, Array Buffer, int BufferLength, out int LengthTransferred, IntPtr Overlapped) => 
-            driverAPI.WritePipe(mHandleStruct, PipeID, Marshal.UnsafeAddrOfPinnedArrayElement(Buffer, 0), BufferLength, out LengthTransferred, Overlapped);     
+            driverAPI.WritePipe(mHandleStruct, PipeID, Marshal.UnsafeAddrOfPinnedArrayElement(Buffer, 0), BufferLength, out LengthTransferred, Overlapped);
     }
 }

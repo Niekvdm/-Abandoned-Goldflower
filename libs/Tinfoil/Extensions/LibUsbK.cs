@@ -15,11 +15,6 @@ namespace Tinfoil.Extensions
             USB.WritePipe(1, Data, Data.Length, out _, IntPtr.Zero);
         }
 
-        public static void Write(this UsbK USB, Command Data)
-        {
-            USB.Write(Data.AsData());
-        }
-
         public static void Write(this UsbK USB, uint Data)
         {
             USB.Write(BitConverter.GetBytes(Data));
@@ -43,16 +38,6 @@ namespace Tinfoil.Extensions
             byte[] b = new byte[Length];
             USB.ReadPipe(0x81, b, Length, out _, IntPtr.Zero);
             return b;
-        }
-
-        public static Command Read(this UsbK USB)
-        {
-            Command cmd = new Command();
-            USB.Read(out uint magic);
-            USB.Read(out uint cmdid);
-            cmd.Magic = magic;
-            cmd.CommandId = (CommandIds)cmdid;
-            return cmd;
         }
 
         public static void Read(this UsbK USB, out uint Data)

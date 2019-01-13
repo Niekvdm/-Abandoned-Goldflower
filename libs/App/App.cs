@@ -148,13 +148,13 @@ namespace GoldFlower
 
 			if (!string.IsNullOrEmpty(e.Message))
 			{
-				Logger.AddMessage(MessageType.Error, e.Message);
+				Logger?.AddMessage(MessageType.Error, e.Message);
 			}
 		}
 
 		private void OnMessageReceived(MessageReceivedEventArgs e)
 		{
-			Logger.AddMessage(e.Type, e.Message);
+			Logger?.AddMessage(e.Type, e.Message);
 		}
 	}
 }
