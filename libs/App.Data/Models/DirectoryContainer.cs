@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Goldtree.Models
+namespace App.Data.Models
 {
     public class DirectoryContainer
 	{

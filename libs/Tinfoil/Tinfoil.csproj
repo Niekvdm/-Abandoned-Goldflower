@@ -5,10 +5,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="LibHac" Version="0.2.0" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\App.Data\App.Data.csproj" />
     <ProjectReference Include="..\LibUsb\LibUsb.csproj" />
     <ProjectReference Include="..\Logger\Logger.csproj" />
