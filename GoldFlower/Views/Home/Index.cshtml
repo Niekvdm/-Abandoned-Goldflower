@@ -3,16 +3,55 @@
 }
 
 <div id="app">
-	<div class="header">
-		&nbsp;
-	</div>
-
 	<div class="container">
-		<section class="module">
+
+		<section class="module" v-if="installer.processorType === processors.NONE">
+			<div class="module-inner">
+				<div class="content-panel">
+					<h2 class="title">Select install method</h2>
+
+					<div class="row">
+						<div class="col-md-6">
+
+							<div class="card card-title">
+								<div class="card-img">
+									<a v-on:click="setProcessorType(processors.GOLDLEAF)">
+										<div class="overlay"></div>
+										<img src="/images/goldleaf.png" style="height: 200px;">
+										<div class="card-caption">
+											<p>Unstable</p>
+										</div>
+									</a>
+								</div>
+							</div>
+
+						</div>
+						<div class="col-md-6">
+
+							<div class="card card-title">
+								<div class="card-img">
+									<a v-on:click="setProcessorType(processors.TINFOIL)">
+										<div class="overlay"></div>
+										<img src="/images/empty.png" style="height: 200px;">
+										<div class="card-caption">
+											<span class="h2">Tinfoil</span>
+											<p>Stable</p>
+										</div>
+									</a>
+								</div>
+							</div>
+
+						</div>
+					</div>			
+				</div>
+			</div>
+		</section>
+
+		<section class="module" v-else>
 			<div class="module-inner">
 				<div class="content-panel">
 					<div class="content-header-wrapper">
-						<h2 class="title">My NSP(s)</h2>
+						<h2 class="title">My NSP(s) :: {{ translateProcessorType(installer.processorType) }}</h2>
 						
 						<ul class="notifications">
 							<li class="dropdown">
@@ -40,6 +79,12 @@
 									</div>
 								</ul>
 							</li>
+							
+							<li>
+								<a class="btn btn-sm btn-default" v-on:click="setProcessorType(processors.NONE)" v-if="installer.status !== INSTALLING && installer.status !== AWAITINGUSERINPUT">
+									Change install method
+								</a>
+							</li>
 						</ul>
 
 						<div class="alert-container">                            
@@ -58,7 +103,7 @@
 								<input type="text" id="path" v-model="path" class="form-control" />
 							</div>
 
-							<button class="btn btn-primary" v-on:click="onSelectDirectoryClicked">
+							<button class="btn btn-info" v-on:click="onSelectDirectoryClicked">
 								<span class="fa fa-folder"></span> Open NSP directory
 							</button>
 						</div>
@@ -66,23 +111,19 @@
 
 					<template v-if="installer.status === IDLE || installer.status === ABORTED || installer.status === CANCELLED">
 						<div class="alert alert-info">
-							<p><strong>Goldleaf:</strong></p>
-							The number in front of the selected NSP(s) indicates the installation order.
-							<br /><br />				
-							<p><strong>Tinfoil:</strong></p>
-							The order does not count for Tinfoil as the user chooses their own order on the Switch.
-							<br />
-							Make sure you open <strong>USB Install NSP</strong> within Tinfoil before pressing install.
+							<p><strong>Information:</strong></p>
+							<template v-if="installer.processorType === processors.GOLDLEAF">
+								The number in front of the selected NSP(s) indicates the installation order.
+							</template>			
+							<template v-else-if="installer.processorType === processors.TINFOIL">
+								Make sure you open <strong>USB Install NSP</strong> within Tinfoil before pressing install.
+							</template>
 						</div>
 
-						<div class="actions clearfix">
+						<div class="actions clearfix" style="margin-bottom: 10px;">
 							<div class="pull-right">
-								<button class="btn btn-primary" v-on:click="onInstallCicked(processors.TINFOIL)" :disabled="!selected.length">
-									<span class="fa fa-upload"></span> Install with Tinfoil
-								</button>
-								
-								<button class="btn btn-primary" v-on:click="onInstallCicked(processors.GOLDLEAF)" :disabled="!selected.length">
-									<span class="fa fa-upload"></span> Install with Goldleaf
+								<button class="btn btn-info" v-on:click="onInstallCicked" :disabled="!selected.length">
+									<span class="fa fa-upload"></span> Start installation
 								</button>
 							</div>
 						</div>
@@ -92,7 +133,7 @@
 								<table class="table table-hover">
 									<thead>
 										<tr>
-											<th class="order"></th>
+											<th class="order" v-if="installer.processorType === processors.GOLDLEAF"></th>
 											<th class="type"></th>
 											<th class="name truncate">Name</th>
 											<th class="titleid">Title ID</th>
@@ -102,7 +143,7 @@
 									</thead>
 									<tbody>
 										<tr v-for="(file, index) in files" :key="index" :class="{ selected: file.selected }">
-											<td class="order">
+											<td class="order" v-if="installer.processorType === processors.GOLDLEAF">
 												<span v-if="file.selected">{{ selected.findIndex(x => x.name === file.name) + 1 }}</span>
 											</td>
 
@@ -126,25 +167,25 @@
 												{{ convertBytesToHumanSize(file.size) }}
 											</td>
 										</tr>
+										<tr v-if="!files.length">
+											<td>&nbsp;</td>
+											<td colspan="5">No (.NSP) files found, make sure you open the correct directory.</td>
+										</tr>
 									</tbody>
 								</table>
 							</div>
 						</div>
 
-						<div class="actions clearfix">
+						<div class="actions clearfix" style="margin-top: 10px;">
 							<div class="pull-right">
-								<button class="btn btn-primary" v-on:click="onInstallCicked(processors.TINFOIL)" :disabled="!selected.length">
-									<span class="fa fa-upload"></span> Install with Tinfoil
-								</button>
-								
-								<button class="btn btn-primary" v-on:click="onInstallCicked(processors.GOLDLEAF)" :disabled="!selected.length">
-									<span class="fa fa-upload"></span> Install with Goldleaf
+								<button class="btn btn-info" v-on:click="onInstallCicked" :disabled="!selected.length">
+									<span class="fa fa-upload"></span> Start installation
 								</button>
 							</div>
 						</div>
 					</template>
 					<template v-else-if="installer.status === INSTALLING || installer.status === AWAITINGUSERINPUT || installer.status === FINISHED">
-						<div class="tile-progress tile-cyan">
+						<div class="tile-progress tile-red">
 							<div class="tile-header">
 								<h3>{{ installer.currentFile.name }}</h3>
 								<span>File progress: {{ installer.files.findIndex(x => x.name === installer.currentFile.name) + 1 }} / {{ installer.files.length }}</span>
@@ -163,13 +204,13 @@
 						</div>
 
 
-						<div class="actions clearfix">
+						<div class="actions clearfix" style="margin-bottom: 10px;">
 							<button class="btn btn-danger pull-right" v-on:click="onAbortClicked" v-if="installer.status !== FINISHED">
 								<span class="fa fa-close"></span> Abort installation
 							</button>
 
                             <button class="btn btn-success pull-right" v-on:click="onCompleteClicked" v-else>
-								<span class="fa fa-close"></span> Complete installation
+								<span class="fa fa-check"></span> Complete installation
 							</button>
 						</div>
 
@@ -248,7 +289,8 @@
 						progress: 0,
 						currentFile: null,
 						files: [],
-                        events: null
+                        events: null,
+						processorType: null,
 					},
 					AWAITINGUSERINPUT: AWAITINGUSERINPUT,
 					INSTALLING: INSTALLING,
@@ -258,8 +300,9 @@
                     IDLE: IDLE,
                     FAILED: FAILED,
 					processors: {
-						TINFOIL: 0,
-						GOLDLEAF: 1
+						NONE: 0,
+						TINFOIL: 1,
+						GOLDLEAF: 2
 					}
 				};
 			},
@@ -277,6 +320,14 @@
 						case 3: return 'info';
 						case 4: return 'primary';
 						default: return 'light';
+					}
+				},
+
+				translateProcessorType(type) {
+					switch(type) {
+						case 1: return 'Tinfoil';
+						case 2: return 'Goldleaf';
+						default: return '-';
 					}
 				},
 
@@ -339,11 +390,10 @@
 					file.selected = !file.selected;
 				},
 
-				onInstallCicked(processor) {
+				onInstallCicked() {
 					this.events = [];
-					this.processor = processor;
 
-					axios.post(`installer/install/${processor}`, this.selected)
+					axios.post(`installer/install/${this.installer.processorType}`, this.selected)
 						.then((response) => {
 							if (response.data) {
 								this.setInstaller(response.data);
@@ -375,8 +425,11 @@
 							}
 						})
 						.catch((error) => {
-							this.error = error;
 							console.error(error);
+
+							setTimeout(() => {
+								this.getInstallProgress();
+							}, 2500);
 						});
 				},
 
@@ -416,13 +469,33 @@
                     } else if (data.status === AWAITINGUSERINPUT) {
 						switch(data.processorType) {
 							case 0: 
-								this.warning = '<p><strong>Tinfoil</strong></p>Select <strong><i>Title management</i></strong> followed by <strong><i>USB installation</i></strong> in the Tinfoil app on the Switch';
+								this.warning = '<p><strong>Awaiting user input</strong></p>Select <strong><i>Title management</i></strong> followed by <strong><i>USB installation</i></strong> in the Tinfoil app on the Switch';
 								break;
 							case 1:
-								this.warning = '<p><strong>Goldleaf</strong></p>Select <strong><i>USB installation</i></strong> in the Goldleaf app on the Switch<br />Select your prefered options in the Goldleaf app to start the installation';
+								this.warning = '<p><strong>Awaiting user input</strong></p>Select <strong><i>USB installation</i></strong> in the Goldleaf app on the Switch<br />Select your prefered options in the Goldleaf app to start the installation';
 								break;
 						}
 					}
+				},
+
+				setProcessorType(type) {
+					this.events = [];
+
+					axios.post(`installer/processorType/${type}`)
+						.then((response) => {
+							if (response.data) {
+								this.installer.processorType = type;
+								this.files = [];
+								this.selected = [];
+								this.$forceUpdate();
+							} else if (response.data.error) {
+								this.error = response.data.error;
+							}
+						})
+						.catch((error) => {
+							this.error = error;
+							console.error(error);
+						});
 				},
 
 				onAbortClicked() {

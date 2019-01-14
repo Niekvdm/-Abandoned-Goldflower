@@ -55,6 +55,8 @@ namespace GoldFlower
 				case ProcessorType.Goldleaf:
 					_processor = new Goldtree.Goldtree();
 					break;
+
+				case ProcessorType.None: return;
 			}
 
 			_processor.OnProgressChanged += this.OnProgressChanged;
@@ -90,7 +92,7 @@ namespace GoldFlower
 		{
 			_processor?.Abort();
 
-			_installState = InstallState.Idle;
+			_installState = InstallState.Aborted;
 			_files = null;
 			_currentFile = null;
 			_progress = 0;
