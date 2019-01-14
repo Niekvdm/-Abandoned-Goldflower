@@ -438,7 +438,7 @@
 
 					for(let event of data.events) {
 						if(!this.events.find(x => x.type === event.type && x.dateTime === event.dateTime)) {
-							if (this.events.length > 50) {
+							if (this.events.length >= 50) {
 								this.events.splice(0, 1);
 							}
 

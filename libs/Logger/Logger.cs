@@ -27,7 +27,7 @@ namespace Logger
 		{
 			_logLevel = logLevel;
 		}
-		
+
 		public void AddError(string message)
 		{
 			if (_logLevel >= 0)
@@ -62,7 +62,9 @@ namespace Logger
 
 		public void AddMessage(MessageType type, string message)
 		{
-			if (MessageBag.Count > 50)
+			if (_logLevel < (int)type) return;
+
+			if (MessageBag.Count >= 50)
 			{
 				MessageBag.RemoveAt(0);
 			}
