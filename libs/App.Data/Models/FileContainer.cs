@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-using Goldtree.Enums;
+using App.Data.Enums;
 
-namespace Goldtree.Models
+namespace App.Data.Models
 {
     public class FileContainer
     {

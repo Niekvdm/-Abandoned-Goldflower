@@ -19,7 +19,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\libs\App\App.csproj" />
+    <ProjectReference Include="..\libs\App.Data\App.Data.csproj" />
     <ProjectReference Include="..\libs\Goldtree\Goldtree.csproj" />
+    <ProjectReference Include="..\libs\Tinfoil\Tinfoil.csproj" />
+    <ProjectReference Include="..\libs\Logger\Logger.csproj" />
   </ItemGroup>
 
 </Project>

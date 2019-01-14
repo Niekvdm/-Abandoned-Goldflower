@@ -3,7 +3,6 @@
 }
 
 <div id="app">
-
 	<div class="header">
 		&nbsp;
 	</div>
@@ -14,44 +13,43 @@
 				<div class="content-panel">
 					<div class="content-header-wrapper">
 						<h2 class="title">My NSP(s)</h2>
+						
+						<ul class="notifications">
+							<li class="dropdown">
+								<a class="dropdown-toggle btn btn-sm btn-default" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+									Events <span class="label label-primary">{{ events.length }}</span>
+								</a>
+
+								<ul class="dropdown-menu notify-drop">
+									<div class="notify-drop-title">
+										<div class="row">
+											<div class="col-md-6 col-sm-6 col-xs-6"><strong>Events</strong></div>
+										</div>
+									</div>
+
+									<div class="drop-content">
+										<li v-for="(item, index) in sortedEvents" :key="index">
+											<div class="col-md-12 col-sm-12 col-xs-12">
+												<span :class="`label label-${convertErrorTypeToClass(item.type)} pull-right`">
+													{{ new Date(item.dateTime).toLocaleTimeString() }}
+												</span>
+												<br />
+												<p :class="`text-${convertErrorTypeToClass(item.type)}`">{{ item.message }}</p>
+											</div>
+										</li>				
+									</div>
+								</ul>
+							</li>
+						</ul>
 
 						<div class="alert-container">                            
-							<div class="alert alert-danger" v-if="error">
-								<strong>Error:</strong>
-								<p>
-									{{ error }}
-								</p>
+							<div class="alert alert-danger" v-if="error">								
+								<div v-html="error"></div>
 							</div>
                             
 							<div class="alert alert-warning" v-if="warning">
-								<strong>Warning:</strong>
-								<p>
-									{{ warning }}
-								</p>
-							</div>
-
-                            <div v-if="installer.events" class="installer-events">
-                                <div class="alert alert-danger" v-if="installer.events.error">
-                                    <ul>
-                                        <li v-for="(item, index) in installer.events.error" :key="index">{{ item }}</li>
-                                    </ul>
-                                </div>
-                                <div class="alert alert-warning" v-if="installer.events.warning">
-                                    <ul>
-                                        <li v-for="(item, index) in installer.events.warning" :key="index">{{ item }}</li>
-                                    </ul>
-                                </div>
-                                <div class="alert alert-success" v-if="installer.events.success">
-                                    <ul>
-                                        <li v-for="(item, index) in installer.events.success" :key="index">{{ item }}</li>
-                                    </ul>
-                                </div>
-                                <div class="alert alert-info" v-if="installer.events.info">
-                                    <ul>
-                                        <li v-for="(item, index) in installer.events.info" :key="index">{{ item }}</li>
-                                    </ul>
-                                </div>
-                            </div>
+								<div v-html="warning"></div>
+							</div>                            
 						</div>
 
 						<div class="actions" v-if="installer.status === IDLE || installer.status === ABORTED || installer.status === CANCELLED">
@@ -67,14 +65,26 @@
 					</div>
 
 					<template v-if="installer.status === IDLE || installer.status === ABORTED || installer.status === CANCELLED">
-						<p class="alert alert-info">
-							The number in front of the selected NSP(s) indicates the installation order
-						</p>
+						<div class="alert alert-info">
+							<p><strong>Goldleaf:</strong></p>
+							The number in front of the selected NSP(s) indicates the installation order.
+							<br /><br />				
+							<p><strong>Tinfoil:</strong></p>
+							The order does not count for Tinfoil as the user chooses their own order on the Switch.
+							<br />
+							Make sure you open <strong>USB Install NSP</strong> within Tinfoil before pressing install.
+						</div>
 
 						<div class="actions clearfix">
-							<button class="btn btn-primary pull-right" v-on:click="onInstallCicked" :disabled="!selected.length">
-								<span class="fa fa-upload"></span> Install selected NSP(s)
-							</button>
+							<div class="pull-right">
+								<button class="btn btn-primary" v-on:click="onInstallCicked(processors.TINFOIL)" :disabled="!selected.length">
+									<span class="fa fa-upload"></span> Install with Tinfoil
+								</button>
+								
+								<button class="btn btn-primary" v-on:click="onInstallCicked(processors.GOLDLEAF)" :disabled="!selected.length">
+									<span class="fa fa-upload"></span> Install with Goldleaf
+								</button>
+							</div>
 						</div>
 
 						<div class="drive-wrapper drive-list-view">
@@ -122,9 +132,15 @@
 						</div>
 
 						<div class="actions clearfix">
-							<button class="btn btn-primary pull-right" v-on:click="onInstallCicked" :disabled="!selected.length">
-								<span class="fa fa-upload"></span> Install selected NSP(s)
-							</button>
+							<div class="pull-right">
+								<button class="btn btn-primary" v-on:click="onInstallCicked(processors.TINFOIL)" :disabled="!selected.length">
+									<span class="fa fa-upload"></span> Install with Tinfoil
+								</button>
+								
+								<button class="btn btn-primary" v-on:click="onInstallCicked(processors.GOLDLEAF)" :disabled="!selected.length">
+									<span class="fa fa-upload"></span> Install with Goldleaf
+								</button>
+							</div>
 						</div>
 					</template>
 					<template v-else-if="installer.status === INSTALLING || installer.status === AWAITINGUSERINPUT || installer.status === FINISHED">
@@ -226,6 +242,7 @@
 					selected: [],
 					error: null,
 					warning: null,
+					events: [],
 					installer: {
 						status: IDLE,
 						progress: 0,
@@ -239,7 +256,11 @@
 					FINISHED: FINISHED,
                     CANCELLED: CANCELLED,
                     IDLE: IDLE,
-                    FAILED: FAILED
+                    FAILED: FAILED,
+					processors: {
+						TINFOIL: 0,
+						GOLDLEAF: 1
+					}
 				};
 			},
 
@@ -248,6 +269,17 @@
 			},
 
 			methods: {
+				convertErrorTypeToClass(type) {
+					switch(type) {
+						case 0: return 'danger';
+						case 1: return 'warning';
+						case 2: return 'success';
+						case 3: return 'info';
+						case 4: return 'primary';
+						default: return 'light';
+					}
+				},
+
 				onSelectDirectoryClicked() {
 					this.files = [];
 					this.error = null;
@@ -307,12 +339,15 @@
 					file.selected = !file.selected;
 				},
 
-				onInstallCicked() {
-					axios.post('installer/install', this.selected)
+				onInstallCicked(processor) {
+					this.events = [];
+					this.processor = processor;
+
+					axios.post(`installer/install/${processor}`, this.selected)
 						.then((response) => {
 							if (response.data) {
 								this.setInstaller(response.data);
-                                this.getInstallProgress(true);
+                                this.getInstallProgress();
 							} else if (response.data.error) {
 								this.error = response.data.error;
 							}
@@ -323,19 +358,17 @@
 						});
 				},
 
-				getInstallProgress(poll = false) {
+				getInstallProgress() {
 					axios.get('installer/progress')
 						.then((response) => {
 							if (response.data) {
 								this.setInstaller(response.data);
 
-                                if(poll) {
-                                    if(this.installer.status === INSTALLING || this.installer.status === AWAITINGUSERINPUT) {
-                                        setTimeout(() => {
-                                            this.getInstallProgress(true);
-                                        }, 1000);
-                                    }
-                                }
+								if(this.installer.status === INSTALLING || this.installer.status === AWAITINGUSERINPUT) {
+									setTimeout(() => {
+										this.getInstallProgress();
+									}, 1000);
+								}
 
 							} else if (response.data.error) {
 								this.error = response.data.error;
@@ -348,16 +381,47 @@
 				},
 
 				setInstaller(data) {
-					this.installer = data;                    
+					this.installer = data;
+
+					for(let event of data.events) {
+						if(!this.events.find(x => x.type === event.type && x.dateTime === event.dateTime)) {
+							if (this.events.length > 50) {
+								this.events.splice(0, 1);
+							}
+
+							this.events.push(event);
+						}
+					}
+
+					// Deselect installed
+					if(data.files) {
+						for(let file of data.files) {
+							if(file.state === FINISHED) {
+								let index = this.selected.findIndex(x => x.name === file.name);
+
+								if(index > -1) {
+									this.selected.splice(index, 1);
+								}
+							}
+						}
+					}
+
                     this.warning = null;
                     this.error = null;
 
 					if (data.status === ABORTED) {
-						this.error = 'Installer has been aborted by user interaction';
+						this.error = 'Installation was aborted by the user';
 					} else if(data.status === CANCELLED) {
-						this.error = 'An error occured during installing';
+						this.error = 'An error occured during installation';
                     } else if (data.status === AWAITINGUSERINPUT) {
-						this.warning = 'Follow the steps in Goldleaf on the Switch to continue';
+						switch(data.processorType) {
+							case 0: 
+								this.warning = '<p><strong>Tinfoil</strong></p>Select <strong><i>Title management</i></strong> followed by <strong><i>USB installation</i></strong> in the Tinfoil app on the Switch';
+								break;
+							case 1:
+								this.warning = '<p><strong>Goldleaf</strong></p>Select <strong><i>USB installation</i></strong> in the Goldleaf app on the Switch<br />Select your prefered options in the Goldleaf app to start the installation';
+								break;
+						}
 					}
 				},
 
@@ -379,11 +443,14 @@
 				},
 
                 onCompleteClicked() {
+					this.events = [];
+
                     axios.post('installer/complete')
                         .then((response) => {
                             if (response.data) {
-                                this.setInstaller(response.data);
                                 this.selected = [];
+                                this.setInstaller(response.data);
+								this.$forceUpdate();
                             } else if (response.data.error) {
                                 this.error = response.data.error;
                             }
@@ -398,6 +465,10 @@
 			computed: {
 				installerProgress() {
 					return this.installer.status === INSTALLING ? this.installer.files.findIndex(x => x.name === this.installer.currentFile.name) : 0;
+				},
+
+				sortedEvents() {
+					return this.events.sort((a,b) => (a.dateTime < b.dateTime) ? 1 : ((b.dateTime < a.dateTime) ? -1 : 0));
 				}
 			}
 		});
