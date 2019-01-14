@@ -7,7 +7,8 @@ namespace App.Data.Enums
 {
 	public enum ProcessorType
 	{
-		Tinfoil = 0,
-		Goldleaf = 1
+		None = 0,
+		Tinfoil = 1,
+		Goldleaf = 2
 	}
 }

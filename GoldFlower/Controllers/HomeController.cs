@@ -80,6 +80,15 @@ namespace GoldFlower.Controllers
 		}
 
 		[HttpPost]
+		[Route("/installer/processorType/{type}")]
+		public IActionResult SetProcessorType(ProcessorType type)
+		{
+			App.Instance.SetProcessorByType(type);
+
+			return new JsonResult(App.Instance.GetAppState());
+		}
+
+		[HttpPost]
 		[Route("/installer/abort")]
 		public IActionResult AbortInstaller()
 		{
