@@ -1,5 +1,5 @@
 # Goldflower
-Web GUI for installing multiple NSP files through Goldleaf by XorTroll
+Web GUI for installing multiple NSP files through Goldleaf or Tinfoil by XorTroll
 
 ## Screenshots
 
