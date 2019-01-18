@@ -1,0 +1,549 @@
+﻿@{
+	ViewData["Title"] = "Install NSP(s)";
+}
+
+<div id="app">
+	<div class="container">
+
+		<section class="module" v-if="installer.processorType === processors.NONE">
+			<div class="module-inner">
+				<div class="content-panel">
+					<h2 class="title">Select install method</h2>
+
+					<div class="row">
+						<div class="col-md-6">
+
+							<div class="card card-title">
+								<div class="card-img">
+									<a v-on:click="setProcessorType(processors.GOLDLEAF)">
+										<div class="overlay"></div>
+										<img src="/images/goldleaf.png" style="height: 200px;">
+										<div class="card-caption">
+											<p>Unstable</p>
+										</div>
+									</a>
+								</div>
+							</div>
+
+						</div>
+						<div class="col-md-6">
+
+							<div class="card card-title">
+								<div class="card-img">
+									<a v-on:click="setProcessorType(processors.TINFOIL)">
+										<div class="overlay"></div>
+										<img src="/images/empty.png" style="height: 200px;">
+										<div class="card-caption">
+											<span class="h2">Tinfoil</span>
+											<p>Stable</p>
+										</div>
+									</a>
+								</div>
+							</div>
+
+						</div>
+					</div>			
+				</div>
+			</div>
+		</section>
+
+		<section class="module" v-else>
+			<div class="module-inner">
+				<div class="content-panel">
+					<div class="content-header-wrapper">
+						<h2 class="title">My NSP(s) :: {{ translateProcessorType(installer.processorType) }}</h2>
+						
+						<ul class="notifications">
+							<li class="dropdown">
+								<a class="dropdown-toggle btn btn-sm btn-default" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
+									Events <span class="label label-primary">{{ events.length }}</span>
+								</a>
+
+								<ul class="dropdown-menu notify-drop">
+									<div class="notify-drop-title">
+										<div class="row">
+											<div class="col-md-6 col-sm-6 col-xs-6"><strong>Events</strong></div>
+										</div>
+									</div>
+
+									<div class="drop-content">
+										<li v-for="(item, index) in sortedEvents" :key="index">
+											<div class="col-md-12 col-sm-12 col-xs-12">
+												<span :class="`label label-${convertErrorTypeToClass(item.type)} pull-right`">
+													{{ new Date(item.dateTime).toLocaleTimeString() }}
+												</span>
+												<br />
+												<p :class="`text-${convertErrorTypeToClass(item.type)}`">{{ item.message }}</p>
+											</div>
+										</li>				
+									</div>
+								</ul>
+							</li>
+							
+							<li>
+								<a class="btn btn-sm btn-default" v-on:click="setProcessorType(processors.NONE)" v-if="installer.status !== INSTALLING && installer.status !== AWAITINGUSERINPUT">
+									Change install method
+								</a>
+							</li>
+						</ul>
+
+						<div class="alert-container">                            
+							<div class="alert alert-danger" v-if="error">								
+								<div v-html="error"></div>
+							</div>
+                            
+							<div class="alert alert-warning" v-if="warning">
+								<div v-html="warning"></div>
+							</div>                            
+						</div>
+
+						<div class="actions" v-if="installer.status === IDLE || installer.status === ABORTED || installer.status === CANCELLED">
+							<div class="form-group">
+								<label for="path">Enter your NSP directory path below</label>
+								<input type="text" id="path" v-model="path" class="form-control" />
+							</div>
+
+							<button class="btn btn-info" v-on:click="onSelectDirectoryClicked">
+								<span class="fa fa-folder"></span> Open NSP directory
+							</button>
+						</div>
+					</div>
+
+					<template v-if="installer.status === IDLE || installer.status === ABORTED || installer.status === CANCELLED">
+						<div class="alert alert-info">
+							<p><strong>Information:</strong></p>
+							<template v-if="installer.processorType === processors.GOLDLEAF">
+								The number in front of the selected NSP(s) indicates the installation order.
+							</template>			
+							<template v-else-if="installer.processorType === processors.TINFOIL">
+								Make sure you open <strong>USB Install NSP</strong> within Tinfoil before pressing install.
+							</template>
+						</div>
+
+						<div class="actions clearfix" style="margin-bottom: 10px;">
+							<div class="pull-right">
+								<button class="btn btn-info" v-on:click="onInstallCicked" :disabled="!selected.length">
+									<span class="fa fa-upload"></span> Start installation
+								</button>
+							</div>
+						</div>
+
+						<div class="drive-wrapper drive-list-view">
+							<div class="table-responsive drive-items-table-wrapper">
+								<table class="table table-hover">
+									<thead>
+										<tr>
+											<th class="order" v-if="installer.processorType === processors.GOLDLEAF"></th>
+											<th class="type"></th>
+											<th class="name truncate">Name</th>
+											<th class="titleid">Title ID</th>
+											<th class="version">Version</th>
+											<th class="size">Size</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr v-for="(file, index) in files" :key="index" :class="{ selected: file.selected }">
+											<td class="order" v-if="installer.processorType === processors.GOLDLEAF">
+												<span v-if="file.selected">{{ selected.findIndex(x => x.name === file.name) + 1 }}</span>
+											</td>
+
+											<td class="type">
+												<i class="fa fa-file-text-o text-primary"></i>
+											</td>
+
+											<td class="name truncate">
+												<a v-on:click="onFileClicked(file)">{{ file.name }}</a>
+											</td>
+
+											<td class="titleid">
+												{{ getTitleId(file.name) }}
+											</td>
+
+											<td class="version">
+												{{ getTitleVersion(file.name) }}
+											</td>
+
+											<td class="size">
+												{{ convertBytesToHumanSize(file.size) }}
+											</td>
+										</tr>
+										<tr v-if="!files.length">
+											<td>&nbsp;</td>
+											<td colspan="5">No (.NSP) files found, make sure you open the correct directory.</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+
+						<div class="actions clearfix" style="margin-top: 10px;">
+							<div class="pull-right">
+								<button class="btn btn-info" v-on:click="onInstallCicked" :disabled="!selected.length">
+									<span class="fa fa-upload"></span> Start installation
+								</button>
+							</div>
+						</div>
+					</template>
+					<template v-else-if="installer.status === INSTALLING || installer.status === AWAITINGUSERINPUT || installer.status === FINISHED">
+						<div class="tile-progress tile-red">
+							<div class="tile-header">
+								<h3>{{ installer.currentFile.name }}</h3>
+								<span>File progress: {{ installer.files.findIndex(x => x.name === installer.currentFile.name) + 1 }} / {{ installer.files.length }}</span>
+							</div>
+							<div class="tile-progressbar">
+								<span :data-fill="`${installer.progress}%`" :style="`width: ${installer.progress}%;`"></span>
+							</div>
+							<div class="tile-footer">
+								<h4>
+									<span class="pct-counter">{{ installer.progress }}</span>%
+								</h4>
+								<span v-if="installer.state === FINISHED">Installation completed</span>
+                                <span v-if="installer.state === AWAITINGUSERINPUT">Awaiting user input</span>
+                                <span v-if="installer.state === INSTALLING">Installing</span>
+							</div>
+						</div>
+
+
+						<div class="actions clearfix" style="margin-bottom: 10px;">
+							<button class="btn btn-danger pull-right" v-on:click="onAbortClicked" v-if="installer.status !== FINISHED">
+								<span class="fa fa-close"></span> Abort installation
+							</button>
+
+                            <button class="btn btn-success pull-right" v-on:click="onCompleteClicked" v-else>
+								<span class="fa fa-check"></span> Complete installation
+							</button>
+						</div>
+
+						<div class="drive-wrapper drive-list-view">
+							<div class="table-responsive drive-items-table-wrapper">
+								<table class="table table-hover">
+									<thead>
+										<tr>
+											<th class="type"></th>
+											<th class="name truncate">Name</th>
+											<th class="titleid">Title ID</th>
+											<th class="version">Version</th>
+											<th class="size">Size</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr v-for="(file, index) in installer.files" :key="index" :class="`file-state-${file.state}`">
+											<td class="type">
+												<i v-if="file.state === INSTALLING" class="fa fa-spin fa-circle-o-notch"></i>
+												<i v-else-if="file.state === FINISHED" class="fa fa-check text-success"></i>
+												<i v-else-if="file.state === FAILED" class="fa fa-close text-danger"></i>
+												<i v-else-if="file.state === CANCELLED" class="fa fa-close text-danger"></i>
+												<i v-else="file.state === IDLE" class="fa fa-ellipsis-h"></i>
+											</td>
+
+											<td class="name truncate">
+												<a>{{ file.name }}</a>
+											</td>
+
+											<td class="titleid">
+												{{ getTitleId(file.name) }}
+											</td>
+
+											<td class="version">
+												{{ getTitleVersion(file.name) }}
+											</td>
+
+											<td class="size">
+												{{ convertBytesToHumanSize(file.size) }}
+											</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+					</template>
+				</div>
+			</div>
+		</section>
+	</div>
+</div>
+
+@section Scripts {
+	<script type="text/javascript">
+		const AWAITINGUSERINPUT = 0;
+		const INSTALLING = 1;
+		const ABORTED = 2;
+		const FINISHED = 3;
+		const CANCELLED = 4;
+        const IDLE = 5;
+        const FAILED = 6;
+
+		const app = new Vue({
+			el: '#app',
+
+			data() {
+				return {
+					path: '@(ViewBag.Path.Replace(@"\", @"\\"))',
+					files: [],
+					selected: [],
+					error: null,
+					warning: null,
+					events: [],
+					installer: {
+						status: IDLE,
+						progress: 0,
+						currentFile: null,
+						files: [],
+                        events: null,
+						processorType: null,
+					},
+					AWAITINGUSERINPUT: AWAITINGUSERINPUT,
+					INSTALLING: INSTALLING,
+					ABORTED: ABORTED,
+					FINISHED: FINISHED,
+                    CANCELLED: CANCELLED,
+                    IDLE: IDLE,
+                    FAILED: FAILED,
+					processors: {
+						NONE: 0,
+						TINFOIL: 1,
+						GOLDLEAF: 2
+					}
+				};
+			},
+
+			mounted() {
+				this.getInstallProgress();
+			},
+
+			methods: {
+				convertErrorTypeToClass(type) {
+					switch(type) {
+						case 0: return 'danger';
+						case 1: return 'warning';
+						case 2: return 'success';
+						case 3: return 'info';
+						case 4: return 'primary';
+						default: return 'light';
+					}
+				},
+
+				translateProcessorType(type) {
+					switch(type) {
+						case 1: return 'Tinfoil';
+						case 2: return 'Goldleaf';
+						default: return '-';
+					}
+				},
+
+				onSelectDirectoryClicked() {
+					this.files = [];
+					this.error = null;
+					this.warning = null;
+
+					axios.post('installer/select-directory', { path: this.path })
+						.then((response) => {
+							if (response.data.result) {
+								this.files = response.data.result;
+							} else if (response.data.error) {
+								this.error = response.data.error;
+							}
+						})
+						.catch((error) => {
+							this.error = error;
+							console.error(error);
+						});
+				},
+
+				convertBytesToHumanSize(bytes, decimals) {
+					if (bytes == 0) return '0 Bytes';
+
+					let k = 1024,
+						dm = decimals <= 0 ? 0 : decimals || 2,
+						sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'],
+						i = Math.floor(Math.log(bytes) / Math.log(k));
+
+					return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+				},
+
+				getTitleId(filename) {
+					let regExp = /(?<=\[).+?(?=\])/g;
+					let matches = filename.match(regExp);
+
+					return matches && matches.length > 0 ? matches[0] : '-';
+				},
+
+				getTitleVersion(filename) {
+					let regExp = /(?<=\[).+?(?=\])/g;
+					let matches = filename.match(regExp);
+
+					if (matches && matches.length > 1) {
+						return matches[1].replace('v', '');
+					}
+
+					return '-';
+				},
+
+				onFileClicked(file) {
+					if (!file.selected) {
+						this.selected.push(file);
+					} else {
+						const index = this.selected.findIndex(x => x.name === file.name);
+						this.selected.splice(index, 1);
+					}
+
+					file.selected = !file.selected;
+				},
+
+				onInstallCicked() {
+					this.events = [];
+
+					axios.post(`installer/install/${this.installer.processorType}`, this.selected)
+						.then((response) => {
+							if (response.data) {
+								this.setInstaller(response.data);
+                                this.getInstallProgress();
+							} else if (response.data.error) {
+								this.error = response.data.error;
+							}
+						})
+						.catch((error) => {
+							this.error = error;
+							console.error(error);
+						});
+				},
+
+				getInstallProgress() {
+					axios.get('installer/progress')
+						.then((response) => {
+							if (response.data) {
+								this.setInstaller(response.data);
+
+								if(this.installer.status === INSTALLING || this.installer.status === AWAITINGUSERINPUT) {
+									setTimeout(() => {
+										this.getInstallProgress();
+									}, 1000);
+								}
+
+							} else if (response.data.error) {
+								this.error = response.data.error;
+							}
+						})
+						.catch((error) => {
+							console.error(error);
+
+							setTimeout(() => {
+								this.getInstallProgress();
+							}, 2500);
+						});
+				},
+
+				setInstaller(data) {
+					this.installer = data;
+
+					for(let event of data.events) {
+						if(!this.events.find(x => x.type === event.type && x.dateTime === event.dateTime)) {
+							if (this.events.length >= 50) {
+								this.events.splice(0, 1);
+							}
+
+							this.events.push(event);
+						}
+					}
+
+					// Deselect installed
+					if(data.files) {
+						for(let file of data.files) {
+							if(file.state === FINISHED) {
+								let index = this.selected.findIndex(x => x.name === file.name);
+
+								if(index > -1) {
+									this.selected.splice(index, 1);
+								}
+							}
+						}
+					}
+
+                    this.warning = null;
+                    this.error = null;
+
+					if (data.status === ABORTED) {
+						this.error = 'Installation was aborted by the user';
+					} else if(data.status === CANCELLED) {
+						this.error = 'An error occured during installation';
+                    } else if (data.status === AWAITINGUSERINPUT) {
+						switch(data.processorType) {
+							case 0: 
+								this.warning = '<p><strong>Awaiting user input</strong></p>Select <strong><i>Title management</i></strong> followed by <strong><i>USB installation</i></strong> in the Tinfoil app on the Switch';
+								break;
+							case 1:
+								this.warning = '<p><strong>Awaiting user input</strong></p>Select <strong><i>USB installation</i></strong> in the Goldleaf app on the Switch<br />Select your prefered options in the Goldleaf app to start the installation';
+								break;
+						}
+					}
+				},
+
+				setProcessorType(type) {
+					this.events = [];
+
+					axios.post(`installer/processorType/${type}`)
+						.then((response) => {
+							if (response.data) {
+								this.installer.processorType = type;
+								this.files = [];
+								this.selected = [];
+								this.$forceUpdate();
+							} else if (response.data.error) {
+								this.error = response.data.error;
+							}
+						})
+						.catch((error) => {
+							this.error = error;
+							console.error(error);
+						});
+				},
+
+				onAbortClicked() {
+					if (confirm('Are you sure you want to abort the installation?')) {
+						axios.post('installer/abort')
+							.then((response) => {
+								if (response.data) {
+									this.setInstaller(response.data);
+								} else if (response.data.error) {
+									this.error = response.data.error;
+								}
+							})
+							.catch((error) => {
+								this.error = error;
+								console.error(error);
+							});
+					}
+				},
+
+                onCompleteClicked() {
+					this.events = [];
+
+                    axios.post('installer/complete')
+                        .then((response) => {
+                            if (response.data) {
+                                this.selected = [];
+                                this.setInstaller(response.data);
+								this.$forceUpdate();
+                            } else if (response.data.error) {
+                                this.error = response.data.error;
+                            }
+                        })
+                        .catch((error) => {
+                            this.error = error;
+                            console.error(error);
+                        });
+                }
+			},
+
+			computed: {
+				installerProgress() {
+					return this.installer.status === INSTALLING ? this.installer.files.findIndex(x => x.name === this.installer.currentFile.name) : 0;
+				},
+
+				sortedEvents() {
+					return this.events.sort((a,b) => (a.dateTime < b.dateTime) ? 1 : ((b.dateTime < a.dateTime) ? -1 : 0));
+				}
+			}
+		});
+	</script>
+}
