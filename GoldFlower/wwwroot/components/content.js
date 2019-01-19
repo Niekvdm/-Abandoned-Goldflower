@@ -41,12 +41,12 @@ export default {
 	template: `
 		<div class="container-fluid mt--6" v-if="installer.processorType === processors.NONE">
 			<div class="row">
-				<div class="col-md-6">
+				<div class="col-md-6 mb-6">
 					<div class="card card-profile">
-						<img src="/images/bg.jpg" alt="Image placeholder" class="card-img-top">
+						<img src="/images/switch.jpg" alt="Image placeholder" class="card-img-top">
 						<div class="card-img-overlay d-flex align-items-center">
 							<div class="w-100">
-								<h5 class="h2 card-title text-white mb-2 text-center">Goldleaf</h5>
+								<h5 class="h2 card-title text-white text-shadow-black mb-2 text-center">Goldleaf</h5>
 							</div>
 						</div>
 						<div class="row justify-content-center">
@@ -63,10 +63,10 @@ export default {
 
 				<div class="col-md-6">
 					<div class="card card-profile">
-						<img src="/images/bg.jpg" alt="Image placeholder" class="card-img-top">						
+						<img src="/images/switch.jpg" alt="Image placeholder" class="card-img-top">						
 						<div class="card-img-overlay d-flex align-items-center">
 							<div class="w-100">
-								<h5 class="h2 card-title text-white mb-2 text-center">Tinfoil</h5>
+								<h5 class="h2 card-title text-white text-shadow-black mb-2 text-center">Tinfoil</h5>
 							</div>
 						</div>
 						<div class="row justify-content-center">
@@ -170,11 +170,87 @@ export default {
 										</td>
 									</tr>
 								</tbody>
-							</table>
+							</table>							
 						</div>
 					</div>
 				</div>
 			</div>
+
+			<div class="row">
+				<div class="col">
+					<div class="card bg-default shadow">
+						<div class="card-header bg-transparent border-0">
+							<h3 class="text-white mb-0">Installation</h3>
+						</div>
+						<div class="table-responsive">
+							<table class="table align-items-center table-dark table-flush">
+								<thead class="thead-dark">
+									<tr>
+										<th style="width: 75px;"></th>
+										<th>Name</th>
+										<th>Title ID</th>
+										<th>Version</th>
+										<th>Size</th>
+										<th>Status</th>
+										<th style="width: 75px;"></th>
+									</tr>
+								</thead>
+								<tbody class="list">
+									<tr v-for="(item, index) in installer.files" :key="index">
+										<td>
+											<i v-if="file.state === INSTALLING" class="text-white fa fa-spin fa-circle-o-notch"></i>
+											<i v-else-if="file.state === FINISHED" class="text-white fa fa-check text-success"></i>
+											<i v-else-if="file.state === FAILED" class="text-white fa fa-close text-danger"></i>
+											<i v-else-if="file.state === CANCELLED" class="text-white fa fa-close text-danger"></i>
+											<i v-else="file.state === IDLE" class="text-white fa fa-ellipsis-h"></i>
+										</td>
+
+										<th scope="row">
+											<div class="media align-items-center">												
+												<div class="media-body">
+													<span class="name mb-0 text-sm">{{ item.name }}</span>
+												</div>
+											</div>
+										</th>
+
+										<td>
+											{{ getTitleId(item.name) }}
+										</td>
+
+										<td>
+											{{ getTitleVersion(item.name) }}
+										</td>
+
+										<td>
+											{{ convertBytesToHumanSize(item.size) }}
+										</td>
+										
+										<td class="text-center">
+											<div class="d-flex align-items-center">
+												<span class="completion mr-2">{{ installer.progress }}%</span>
+												<div>
+													<div class="progress">
+														<div class="progress-bar bg-success" role="progressbar" :style="installerProgressWidth"></div>
+													</div>
+												</div>
+											</div>
+										</td>
+
+										<td class="text-center" style="width: 50px;">
+											<span class="badge badge-warning" v-if="item.selected">{{ selected.findIndex(x => x.name === item.name) + 1 }}</span>
+										</td>
+									</tr>
+									<tr v-if="!files.length">
+										<td colspan="6">
+											No (.NSP) files found, make sure you search the correct directory.
+										</td>
+									</tr>
+								</tbody>
+							</table>							
+						</div>
+					</div>
+				</div>
+			</div>			
 		</div>
 	`,
 	mounted() {
@@ -347,7 +423,6 @@ export default {
 				.then((response) => {
 					if (response.data) {
 						this.installer.processorType = type;
-						this.files = [];
 						this.selected = [];
 						this.$forceUpdate();
 					} else if (response.data.error) {
@@ -399,6 +474,10 @@ export default {
 	computed: {
 		installerProgress() {
 			return this.installer.status === INSTALLING ? this.installer.files.findIndex(x => x.name === this.installer.currentFile.name) : 0;
+		},
+
+		installerProgressWidth() {
+			return `width: {this.installer.progress}%;`;
 		},
 
 		sortedEvents() {

@@ -6,6 +6,12 @@ export default {
 		<nav class="navbar navbar-top navbar-expand navbar-dark bg-primary border-bottom">
 		<div class="container-fluid">
 			<div class="collapse navbar-collapse" id="navbarSupportedContent">			
+				<ul class="navbar-nav">
+					<li class="nav-item">	
+						<h1 class="h1 text-white">Goldflower</h1>
+					</li>
+				</ul>
+			
 				<!-- Navbar links -->
 				<ul class="navbar-nav align-items-center ml-md-auto">
 					<li class="nav-item dropdown">
