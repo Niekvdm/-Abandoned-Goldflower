@@ -128,7 +128,7 @@ export default {
 
 				<div class="actions clearfix" style="margin-bottom: 10px;">
 					<div class="pull-right">
-						<button class="btn btn-primary" v-if="!isInstalling" @click="onInstallCicked" :disabled="!selected.length">
+						<button class="btn btn-neutral" v-if="!isInstalling" @click="onInstallCicked" :disabled="!selected.length">
 							<span class="fa fa-upload"></span> Start installation
 						</button>
 

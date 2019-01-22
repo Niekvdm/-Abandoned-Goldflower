@@ -1,5 +1,5 @@
 body {
-	background-color: #383838;
+	background-color: rgb(54, 59, 63) !important;		
 }
 
 .events-list {
@@ -10,12 +10,35 @@ body {
 
 .bg-primary {
 	color: #ffffff !important;
-	background-color: #36393e !important;
+	background-color: rgb(54, 59, 63) !important;
 }
 
 .bg-secondary {
 	color: #ffffff !important;
-	background-color: #424549 !important;
+	background-color: #2C2F33 !important;
+}
+
+.bg-default {
+	background-color: #2C2F33 !important;
+}
+
+.table-dark {	
+	background-color: #2C2F33 !important;
+}
+
+.table .thead-dark th {
+	background-color: rgb(54, 59, 63) !important;		
+	color: #ffffff;
+	border-color: rgb(54, 59, 63) !important;
+}
+
+.btn-neutral {
+	color: #23272A;
+}
+
+.table.table-dark th,
+.table.table-dark td {
+	border-color: rgb(54, 59, 63) !important;
 }
 
 .bg-secondary h6 {

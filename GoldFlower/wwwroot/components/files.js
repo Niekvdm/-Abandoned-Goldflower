@@ -69,12 +69,30 @@ export default {
 
 									<td class="text-center" v-else>
 										<div class="d-flex align-items-center">
-											<span class="completion mr-2">{{ installer.progress }}%</span>
-											<div>
-												<div class="progress">
-													<div class="progress-bar bg-success" role="progressbar" :style="installerProgressWidth"></div>
+											<template v-if="item.state === InstallState.Installing">
+												<span class="completion mr-2">{{ installer.progress }}%</span>
+												<div>
+													<div class="progress">
+														<div class="progress-bar bg-success" role="progressbar" :style="installerProgressWidth"></div>
+													</div>
 												</div>
-											</div>
+											</template>
+											<template v-else-if="item.state === InstallState.Finished">
+												<span class="completion mr-2">100%</span>
+												<div>
+													<div class="progress">
+														<div class="progress-bar bg-success" role="progressbar" style="width: 100%;"></div>
+													</div>
+												</div>
+											</template>
+											<template v-else>
+												<span class="completion mr-2">0%</span>
+												<div>
+													<div class="progress">
+														<div class="progress-bar bg-success" role="progressbar" style="width: 0%;"></div>
+													</div>
+												</div>
+											</template>
 										</div>
 									</td>
 
